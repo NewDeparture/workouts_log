@@ -3,7 +3,7 @@
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 20 * * 1,3,5'
   push:
     branches:
       - master
@@ -21,9 +21,9 @@ on:
 
 env:
   # please change to your own config.
-  RUN_TYPE: strava # support strava/nike/garmin/garmin_cn/keep/only_gpx/only_fit/nike_to_strava/strava_to_garmin/strava_to_garmin_cn/garmin_to_strava/garmin_to_strava_cn/codoon, Please change the 'pass' it to your own
-  GITHUB_NAME: zhaohongxuan  # change to yours
-  GITHUB_EMAIL: hxzhenu@gmail.com # change to yours
+  RUN_TYPE: coros # support strava/nike/garmin/garmin_cn/keep/only_gpx/only_fit/nike_to_strava/strava_to_garmin/strava_to_garmin_cn/garmin_to_strava/garmin_to_strava_cn/codoon, Please change the 'pass' it to your own
+  GITHUB_NAME: LYX  # change to yours
+  GITHUB_EMAIL: oou@live.com # change to yours
 
   # IGNORE_BEFORE_SAVING: True # if you want to ignore some data before saving, set this to True
   IGNORE_START_END_RANGE: 0 # Unit meter
@@ -86,6 +86,13 @@ jobs:
         if: env.RUN_TYPE == 'nike_to_strava'
         run: |
           python run_page/nike_to_strava_sync.py ${{ secrets.NIKE_REFRESH_TOKEN }} ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}
+
+      - name: Run sync Coros script
+        if: env.RUN_TYPE == 'coros'
+        run: |
+          python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }}
+        # If you only want to sync 'type running' add args --only-run, default script is to sync all data (rides , swims, strengths trains, hikes, runs, etc.).
+        # python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
 
       - name: Run sync Keep script
         if: env.RUN_TYPE == 'keep'
