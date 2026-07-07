@@ -1,0 +1,45 @@
+{
+  "checkins": [
+    {
+      "date": "2026-05-18",
+      "pushups": true,
+      "squats": true,
+      "coldShower": true,
+      "squatsCount": 30,
+      "coldShowerAt": "2026-05-17T21:35:49"
+    },
+    {
+      "date": "2026-05-19",
+      "pushups": true,
+      "squats": true,
+      "coldShower": true,
+      "pushupsCount": 50,
+      "pushupsAt": "2026-05-18T23:58:05",
+      "squatsCount": 50,
+      "squatsAt": "2026-05-18T23:58:40",
+      "coldShowerAt": "2026-05-18T23:58:48"
+    },
+    {
+      "date": "2026-05-20",
+      "pushups": true,
+      "squats": true,
+      "coldShower": true,
+      "coldShowerAt": "2026-05-19T23:11:55",
+      "squatsCount": 50,
+      "squatsAt": "2026-05-20T00:01:51",
+      "pushupsCount": 50,
+      "pushupsAt": "2026-05-20T00:02:01"
+    },
+    {
+      "date": "2026-05-22",
+      "pushups": true,
+      "squats": true,
+      "coldShower": true,
+      "coldShowerAt": "2026-05-22T00:58:40",
+      "squatsCount": 50,
+      "squatsAt": "2026-05-22T01:07:23",
+      "pushupsCount": 50,
+      "pushupsAt": "2026-05-22T01:07:28"
+    }
+  ]
+}

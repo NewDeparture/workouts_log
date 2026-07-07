@@ -1,0 +1,4 @@
+-r requirements.txt
+# Ci
+black==23.3.0
+
