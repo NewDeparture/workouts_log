@@ -1,9 +1,4 @@
-﻿# ============================================================
-# 运动数据同步工作流
-# 当前配置：从 COROS 手表同步运动数据
-# 触发方式：手动触发 (workflow_dispatch) 或定时触发 (每周一、三、五 UTC 20:00)
-# ============================================================
-name: Run Data Sync
+﻿name: Run Data Sync
 
 on:
   workflow_dispatch:
@@ -29,9 +24,6 @@ on:
 # 全局环境变量
 env:
   # --- 数据源配置 ---
-  # 当前使用 COROS，支持的值见下方注释
-  # 可选值: strava / nike / garmin / garmin_cn / keep / only_gpx / only_fit / nike_to_strava / strava_to_garmin / strava_to_garmin_cn /
-  #         garmin_to_strava / garmin_to_strava_cn / codoon / tulipsport
   RUN_TYPE: coros
 
   # --- Git 提交身份 ---
@@ -41,6 +33,7 @@ env:
   # --- GPS 数据过滤 ---
   # IGNORE_BEFORE_SAVING: True  # 保存前过滤数据（需要时取消注释）
   IGNORE_START_END_RANGE: 0     # 忽略轨迹首尾范围（单位：米）
+
   # 使用 https://developers.google.com/maps/documentation/utilities/polylineutility 生成 polyline
   IGNORE_POLYLINE: ""           # 忽略指定 polyline 区域
   IGNORE_RANGE: 0               # 忽略范围（单位：米）
@@ -98,10 +91,6 @@ jobs:
             ${{ env.DATA_CACHE_PREFIX }}-${{ github.sha }}-
             ${{ env.DATA_CACHE_PREFIX }}-
 
-      # ============================================================
-      # 当前启用：COROS 同步
-      # ============================================================
-
       # COROS 手表数据同步（当前 RUN_TYPE=coros，此步骤将执行）
       - name: Run sync Coros script
         if: env.RUN_TYPE == 'coros'
@@ -109,78 +98,72 @@ jobs:
           python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }}
         # 如果只需要同步跑步数据，添加 --only-run 参数：
         # python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
-
-      # ============================================================
-      # 以下为其他平台同步步骤，当前已注释（RUN_TYPE != 对应值时不执行）
-      # 如需切换数据源，修改 RUN_TYPE 并取消相应步骤的注释即可
-      # ============================================================
-
     
       # # Keep 数据同步（含 GPX）
-      # - name: Run sync Keep script
-      #   if: env.RUN_TYPE == 'keep'
-      #   run: |
-      #     python run_page/keep_sync.py ${{ secrets.KEEP_MOBILE }} ${{ secrets.KEEP_PASSWORD }} --with-gpx
+      - name: Run sync Keep script
+        if: env.RUN_TYPE == 'keep'
+        run: |
+          python run_page/keep_sync.py ${{ secrets.KEEP_MOBILE }} ${{ secrets.KEEP_PASSWORD }} --with-gpx
 
       # # Strava 数据同步
-      # - name: Run sync Strava script
-      #   if: env.RUN_TYPE == 'strava'
-      #   run: |
-      #     python run_page/strava_sync_recent.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}
+      - name: Run sync Strava script
+        if: env.RUN_TYPE == 'strava'
+        run: |
+          python run_page/strava_sync_recent.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}
 
       # # 咕咚 (Codoon) 数据同步
-      # - name: Run sync Codoon script
-      #   if: env.RUN_TYPE == 'codoon'
-      #   run: |
-      #     python run_page/codoon_sync.py ${{ secrets.CODOON_MOBILE }} ${{ secrets.CODOON_PASSWORD }}
+      - name: Run sync Codoon script
+        if: env.RUN_TYPE == 'codoon'
+        run: |
+          python run_page/codoon_sync.py ${{ secrets.CODOON_MOBILE }} ${{ secrets.CODOON_PASSWORD }}
 
       # # Garmin 国际服数据同步（如需 TCX 格式可添加 --tcx 参数）
-      # - name: Run sync Garmin script
-      #   if: env.RUN_TYPE == 'garmin'
-      #   run: |
-      #     python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING }}
+      - name: Run sync Garmin script
+        if: env.RUN_TYPE == 'garmin'
+        run: |
+          python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING }}
 
       # # Garmin 国服数据同步
-      # - name: Run sync Garmin CN script
-      #   if: env.RUN_TYPE == 'garmin_cn'
-      #   run: |
-      #     python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING_CN }} --is-cn
+      - name: Run sync Garmin CN script
+        if: env.RUN_TYPE == 'garmin_cn'
+        run: |
+          python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING_CN }} --is-cn
 
       # # 纯 GPX 文件同步（从 GPX_OUT 目录导入 .gpx 文件）
-      # - name: Run sync Only GPX script
-      #   if: env.RUN_TYPE == 'only_gpx'
-      #   run: |
-      #     python run_page/gpx_sync.py
+      - name: Run sync Only GPX script
+        if: env.RUN_TYPE == 'only_gpx'
+        run: |
+          python run_page/gpx_sync.py
 
       # # 纯 FIT 文件同步（从 FIT_OUT 目录导入 .fit 文件）
-      # - name: Run sync Only FIT script
-      #   if: env.RUN_TYPE == 'only_fit'
-      #   run: |
-      #     python run_page/fit_sync.py
+      - name: Run sync Only FIT script
+        if: env.RUN_TYPE == 'only_fit'
+        run: |
+          python run_page/fit_sync.py
 
       # # 纯 TCX 文件同步（从 TCX_OUT 目录导入 .tcx 文件）
-      # - name: Run sync Only TCX script
-      #   if: env.RUN_TYPE == 'only_tcx'
-      #   run: |
-      #     python run_page/tcx_sync.py
+      - name: Run sync Only TCX script
+        if: env.RUN_TYPE == 'only_tcx'
+        run: |
+          python run_page/tcx_sync.py
 
       # # Garmin 国服 → Strava 数据迁移
-      # - name: Run sync Garmin-cn to Strava(Run with Garmin data backup in Strava)
-      #   if: env.RUN_TYPE == 'garmin_to_strava_cn'
-      #   run: |
-      #     python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_SECRET_STRING_CN }}  --is-cn
+      - name: Run sync Garmin-cn to Strava(Run with Garmin data backup in Strava)
+        if: env.RUN_TYPE == 'garmin_to_strava_cn'
+        run: |
+          python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_SECRET_STRING_CN }}  --is-cn
 
       # # Garmin 国际服 → Strava 数据迁移
-      # - name: Run sync Garmin to Strava(Run with Garmin data backup in Strava)
-      #   if: env.RUN_TYPE == 'garmin_to_strava'
-      #   run: |
-      #     python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_EMAIL }} ${{ secrets.GARMIN_PASSWORD }}
+      - name: Run sync Garmin to Strava(Run with Garmin data backup in Strava)
+        if: env.RUN_TYPE == 'garmin_to_strava'
+        run: |
+          python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_EMAIL }} ${{ secrets.GARMIN_PASSWORD }}
 
       # # Tulipsport 数据同步
-      # - name: Run sync Tulipsport script
-      #   if: env.RUN_TYPE == 'tulipsport'
-      #   run: |
-      #     python run_page/tulipsport_sync.py ${{ secrets.TULIPSPORT_TOKEN }} --with-gpx
+      - name: Run sync Tulipsport script
+        if: env.RUN_TYPE == 'tulipsport'
+        run: |
+          python run_page/tulipsport_sync.py ${{ secrets.TULIPSPORT_TOKEN }} --with-gpx
 
 
       # --- 推送变更到仓库（仅在未使用缓存时执行） ---
@@ -197,8 +180,6 @@ jobs:
   # ──────────────────────────────────────────────────────────
   # Job 2: 构建并发布 GitHub Pages
   # 依赖 sync job 成功完成，且 BUILD_GH_PAGES 不为 false
-  # 如需禁用 Pages 部署，在 GitHub 仓库设置中添加变量 BUILD_GH_PAGES=false
-  # 或在 env 区域将 BUILD_GH_PAGES 设为 false
   # ──────────────────────────────────────────────────────────
   publish_github_pages:
     # 使用 env.BUILD_GH_PAGES 环境变量（而非 vars 上下文），
