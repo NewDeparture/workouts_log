@@ -181,7 +181,7 @@ jobs:
     name: Build and publish Github Pages
     uses: ./.github/workflows/gh-pages.yml
     with:
-      save_data_in_github_cache: false
+      save_data_in_github_cache: true
       data_cache_prefix: 'track_data'
     needs:
       - sync
