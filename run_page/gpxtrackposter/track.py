@@ -94,30 +94,45 @@ class Track:
     def load_fit(self, file_name):
         try:
             self.file_names = [os.path.basename(file_name)]
-            # Handle empty fit files
-            # (for example, treadmill runs pulled via garmin-connect-export)
+            # 处理空 fit 文件（例如通过 garmin-connect-export 拉取的跑步机数据）
+            # 原逻辑：if os.path.getsize(file_name) == 0: raise TrackLoadError("Empty FIT file")
+            # 改为：保留该记录，距离设为 0（空轨迹也计入，不抛出错误）
             if os.path.getsize(file_name) == 0:
-                raise TrackLoadError("Empty FIT file")
+                # raise TrackLoadError("Empty FIT file")  # 注释：保留空文件记录，不抛错
+                self.length = 0
+                return
             stream = Stream.from_file(file_name)
             decoder = Decoder(stream)
             messages, errors = decoder.read(convert_datetimes_to_dates=False)
             if errors:
+                # 原逻辑：print 后直接 return 丢弃该文件
+                # 改为：保留记录，距离设为 0，不再跳过
                 print(f"FIT file read fail: {errors}")
+                self.length = 0
                 return
-            if (
-                messages.get("session_mesgs") is None
-                or messages.get("session_mesgs")[0].get("total_distance") is None
-            ):
+            if messages.get("session_mesgs") is None:
+                # 完全没有 session 时无法获取开始时间，仍保留空记录（距离 0）；
+                # 下游会因缺少 start_time 安全跳过，不会崩溃
                 print(
-                    f"Session message or total distance is missing when loading FIT. for file {self.file_names[0]}, we just ignore this file and continue"
+                    f"Session message missing when loading FIT. for file {self.file_names[0]}, keep as empty record with distance 0"
                 )
+                self.length = 0
                 return
+            # 原逻辑：total_distance 缺失时直接 return 丢弃（导致室内/跑步机运动丢失）
+            # 改为：即使 total_distance 缺失，也继续解析并保留记录（距离在 _load_fit_data 中设为 0）
+            if messages.get("session_mesgs")[0].get("total_distance") is None:
+                print(
+                    f"Total distance missing when loading FIT. for file {self.file_names[0]}, keep record with distance 0"
+                )
             self._load_fit_data(messages)
         except Exception as e:
+            # 原逻辑：打印异常后忽略该文件（continue），即丢弃
+            # 改为：保留为空记录（距离 0），不再丢弃
             print(
-                f"Something went wrong when loading FIT. for file {self.file_names[0]}, we just ignore this file and continue"
+                f"Something went wrong when loading FIT. for file {self.file_names[0]}, keep as empty record with distance 0"
             )
             print(str(e))
+            self.length = 0
 
     def load_from_db(self, activity):
         # use strava as file name
@@ -276,10 +291,14 @@ class Track:
         )
         self.run_id = self.__make_run_id(self.start_time)
         self.end_time = datetime.datetime.fromtimestamp(
-            (message["start_time"] + FIT_EPOCH_S + message["total_elapsed_time"]),
+            # 原逻辑：(message["start_time"] + FIT_EPOCH_S + message["total_elapsed_time"])
+            # 改为：total_elapsed_time 缺失时按 0 处理，避免 KeyError
+            (message["start_time"] + FIT_EPOCH_S + message.get("total_elapsed_time", 0)),
             tz=timezone.utc,
         )
-        self.length = message["total_distance"]
+        # 原逻辑：self.length = message["total_distance"]  # total_distance 缺失会 KeyError
+        # 改为：缺失时距离设为 0（保留记录）
+        self.length = message["total_distance"] if message.get("total_distance") is not None else 0
         self.average_heartrate = (
             message["avg_heart_rate"] if "avg_heart_rate" in message else None
         )
@@ -289,21 +308,27 @@ class Track:
         self.type = message["sport"].lower()
 
         # moving_dict
-        self.moving_dict["distance"] = message["total_distance"]
+        # 原逻辑：self.moving_dict["distance"] = message["total_distance"]  # 缺失会 KeyError
+        # 改为：缺失时设为 0
+        self.moving_dict["distance"] = message["total_distance"] if message.get("total_distance") is not None else 0
+        # 原逻辑：缺失 total_moving_time 时回退到 message["total_timer_time"]（缺失会 KeyError）
+        # 改为：两者皆缺失时计时设为 0
         self.moving_dict["moving_time"] = datetime.timedelta(
             seconds=(
                 message["total_moving_time"]
                 if "total_moving_time" in message
-                else message["total_timer_time"]
+                else message.get("total_timer_time", 0)
             )
         )
+        # 原逻辑：seconds=message["total_elapsed_time"]  # 缺失会 KeyError
+        # 改为：缺失时设为 0
         self.moving_dict["elapsed_time"] = datetime.timedelta(
-            seconds=message["total_elapsed_time"]
+            seconds=message.get("total_elapsed_time", 0)
         )
+        # 原逻辑：average_speed 为 None 时，下游 float(None) 会报错导致记录丢失
+        # 改为：缺失或为空时设为 0.0
         self.moving_dict["average_speed"] = (
-            message["enhanced_avg_speed"]
-            if message["enhanced_avg_speed"]
-            else message["avg_speed"]
+            message.get("enhanced_avg_speed") or message.get("avg_speed") or 0
         )
         for record in fit["record_mesgs"]:
             if "position_lat" in record and "position_long" in record:

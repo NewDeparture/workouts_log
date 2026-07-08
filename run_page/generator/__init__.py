@@ -191,9 +191,16 @@ class Generator:
 
     def load(self):
         # if sub_type is not in the db, just add an empty string to it
+        # 原逻辑：仅保留距离 > 0.1 的活动（会丢弃距离为 0 的室内/空轨迹记录）
+        # 改为：保留所有运动记录（含距离为 0 的情况），距离 >= 0 即全部保留
+        # activities = (
+        #     self.session.query(Activity)
+        #     .filter(Activity.distance > 0.1)
+        #     .order_by(Activity.start_date_local)
+        # )
         activities = (
             self.session.query(Activity)
-            .filter(Activity.distance > 0.1)
+            .filter(Activity.distance >= 0)
             .order_by(Activity.start_date_local)
         )
         activity_list = []

@@ -93,10 +93,12 @@ class TrackLoader:
 
         tracks = self._filter_tracks(tracks)
 
-        # merge tracks that took place within one hour
-        tracks = self._merge_tracks(tracks)
-        # filter out tracks with length < min_length
-        return [t for t in tracks if t.length >= self.min_length]
+        # 原逻辑：合并 1 小时内同类型的相邻运动
+        # tracks = self._merge_tracks(tracks)  # 注释：按需求移除轨迹合并，如实保留每一条记录
+        # 原逻辑：过滤掉长度 < min_length(100米) 的轨迹
+        # return [t for t in tracks if t.length >= self.min_length]
+        # 改为：保留全部轨迹（含距离为 0 的记录）
+        return tracks
 
     def load_tracks_from_db(self, sql_file, is_grid=False, is_circular=False):
         session = init_db(sql_file)
@@ -127,22 +129,29 @@ class TrackLoader:
         print(f"All tracks: {len(tracks)}")
         tracks = self._filter_tracks(tracks)
         print(f"After filter tracks: {len(tracks)}")
-        # merge tracks that took place within one hour
-        tracks = self._merge_tracks(tracks)
-        return [t for t in tracks if t.length >= self.min_length]
+        # 原逻辑：合并 1 小时内同类型的相邻运动
+        # tracks = self._merge_tracks(tracks)  # 注释：按需求移除轨迹合并
+        # 原逻辑：过滤掉长度 < min_length(100米) 的轨迹
+        # return [t for t in tracks if t.length >= self.min_length]
+        return tracks
 
     def _filter_tracks(self, tracks):
         filtered_tracks = []
         for t in tracks:
             file_name = t.file_names[0]
-            if int(t.length) == 0:
-                log.info(f"{file_name}: skipping empty track")
-            elif not t.start_time_local:
+            # 原逻辑：长度为 0 直接跳过（会丢弃距离为 0 的室内/空轨迹记录）
+            # 改为：保留长度为 0 的记录（距离设为 0），由下游如实入库
+            # if int(t.length) == 0:
+            #     log.info(f"{file_name}: skipping empty track")
+            if not t.start_time_local:
+                # 无开始时间的记录无法构成有效活动，仍跳过（避免下游 strftime 报错）
                 log.info(f"{file_name}: skipping track without start time")
-            elif not self.year_range.contains(t.start_time_local):
-                log.info(
-                    f"{file_name}: skipping track with wrong year {t.start_time_local.year}"
-                )
+            # 原逻辑：按年份范围过滤
+            # 改为：注释掉年份过滤（经确认 YearRange 未初始化，contains 恒为 True，过滤实际不生效）
+            # elif not self.year_range.contains(t.start_time_local):
+            #     log.info(
+            #         f"{file_name}: skipping track with wrong year {t.start_time_local.year}"
+            #     )
             else:
                 t.special = file_name in self.special_file_names
                 filtered_tracks.append(t)
@@ -150,22 +159,24 @@ class TrackLoader:
 
     @staticmethod
     def _merge_tracks(tracks):
-        log.info("Merging tracks...")
-        tracks = sorted(tracks, key=lambda t1: t1.start_time_local)
-        merged_tracks = []
-        last_end_time = None
-        for t in tracks:
-            if last_end_time is None:
-                merged_tracks.append(t)
-            else:
-                dt = (t.start_time_local - last_end_time).total_seconds()
-                if 0 < dt < 3600 and merged_tracks[-1].type == t.type:
-                    merged_tracks[-1].append(t)
-                else:
-                    merged_tracks.append(t)
-            last_end_time = t.end_time_local
-        log.info(f"Merged {len(tracks) - len(merged_tracks)} track(s)")
-        return merged_tracks
+        # 按需求移除轨迹合并逻辑：以下代码已注释，不再将相邻（1 小时内）同类型运动合并为一条
+        # log.info("Merging tracks...")
+        # tracks = sorted(tracks, key=lambda t1: t1.start_time_local)
+        # merged_tracks = []
+        # last_end_time = None
+        # for t in tracks:
+        #     if last_end_time is None:
+        #         merged_tracks.append(t)
+        #     else:
+        #         dt = (t.start_time_local - last_end_time).total_seconds()
+        #         if 0 < dt < 3600 and merged_tracks[-1].type == t.type:
+        #             merged_tracks[-1].append(t)
+        #         else:
+        #             merged_tracks.append(t)
+        #     last_end_time = t.end_time_local
+        # log.info(f"Merged {len(tracks) - len(merged_tracks)} track(s)")
+        # return merged_tracks
+        return tracks
 
     @staticmethod
     def _load_data_tracks(file_names, load_func=load_gpx_file, activity_title_dict={}):
