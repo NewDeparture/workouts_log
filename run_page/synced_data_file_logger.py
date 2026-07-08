@@ -18,7 +18,7 @@ def save_synced_activity_list(activity_list: list):
 
 
 def load_synced_file_list():
-    if os.path.exists(SYNCED_FILE):
+    if os.path.exists(SYNCED_FILE) and os.path.getsize(SYNCED_FILE) > 0:
         with open(SYNCED_FILE, "r") as f:
             try:
                 return json.load(f)
