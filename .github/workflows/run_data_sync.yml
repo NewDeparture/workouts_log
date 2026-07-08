@@ -1,0 +1,194 @@
+name: Run Data Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 20 * * 1,3,5'
+  # 以下 push 触发器已注释，如需代码推送时自动同步可取消注释
+  # push:
+  #   branches:
+  #     - master
+  #   paths:
+  #     - run_page/nike_sync.py
+  #     - run_page/nike_to_strava_sync.py
+  #     - run_page/strava_sync_recent.py
+  #     - run_page/gen_svg.py
+  #     - run_page/garmin_sync.py
+  #     - run_page/keep_sync.py
+  #     - run_page/gpx_sync.py
+  #     - run_page/tcx_sync.py
+  #     - run_page/garmin_to_strava_sync.py
+  #     - requirements.txt
+
+
+# 全局环境变量
+env:
+  # --- 数据源配置 ---
+  RUN_TYPE: coros
+
+  # --- Git 提交身份 ---
+  GITHUB_NAME: LYX
+  GITHUB_EMAIL: oou@live.com
+
+  # --- GPS 数据过滤 ---
+  # IGNORE_BEFORE_SAVING: True  # 保存前过滤数据（需要时取消注释）
+  IGNORE_START_END_RANGE: 0     # 忽略轨迹首尾范围（单位：米）
+
+  # 使用 https://developers.google.com/maps/documentation/utilities/polylineutility 生成 polyline
+  IGNORE_POLYLINE: ""           # 忽略指定 polyline 区域
+  IGNORE_RANGE: 0               # 忽略范围（单位：米）
+
+  # --- 缓存与部署 ---
+  SAVE_DATA_IN_GITHUB_CACHE: true   # 使用 GitHub Cache 存储数据（Vercel 部署建议开启）
+  DATA_CACHE_PREFIX: 'track_data'    # 缓存键前缀
+  BUILD_GH_PAGES: true              # 是否构建 GitHub Pages（不需要时设为 false）
+
+jobs:
+  # ──────────────────────────────────────────────────────────
+  # Job 1: 数据同步
+  # ──────────────────────────────────────────────────────────
+  sync:
+    name: Sync
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- 环境准备 ---
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        id: setup_python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: 'requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      # --- 数据缓存（加速后续构建） ---
+      - name: Cache Data Files
+        if: env.SAVE_DATA_IN_GITHUB_CACHE == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            activities
+            assets
+            GPX_OUT
+            TCX_OUT
+            FIT_OUT
+            Workouts
+            run_page/data.db
+            src/static/activities.json
+            imported.json
+          key: ${{ env.DATA_CACHE_PREFIX }}-${{ github.sha }}-${{ github.run_id }}
+          restore-keys: |
+            ${{ env.DATA_CACHE_PREFIX }}-${{ github.sha }}-
+            ${{ env.DATA_CACHE_PREFIX }}-
+
+      # COROS 手表数据同步（当前 RUN_TYPE=coros，此步骤将执行）
+      - name: Run sync Coros script
+        if: env.RUN_TYPE == 'coros'
+        run: |
+          python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }}
+        # 如果只需要同步跑步数据，添加 --only-run 参数：
+        # python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
+    
+      # # Keep 数据同步（含 GPX）
+      - name: Run sync Keep script
+        if: env.RUN_TYPE == 'keep'
+        run: |
+          python run_page/keep_sync.py ${{ secrets.KEEP_MOBILE }} ${{ secrets.KEEP_PASSWORD }} --with-gpx
+
+      # # Strava 数据同步
+      - name: Run sync Strava script
+        if: env.RUN_TYPE == 'strava'
+        run: |
+          python run_page/strava_sync_recent.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}
+
+      # # 咕咚 (Codoon) 数据同步
+      - name: Run sync Codoon script
+        if: env.RUN_TYPE == 'codoon'
+        run: |
+          python run_page/codoon_sync.py ${{ secrets.CODOON_MOBILE }} ${{ secrets.CODOON_PASSWORD }}
+
+      # # Garmin 国际服数据同步（如需 TCX 格式可添加 --tcx 参数）
+      - name: Run sync Garmin script
+        if: env.RUN_TYPE == 'garmin'
+        run: |
+          python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING }}
+
+      # # Garmin 国服数据同步
+      - name: Run sync Garmin CN script
+        if: env.RUN_TYPE == 'garmin_cn'
+        run: |
+          python run_page/garmin_sync.py ${{ secrets.GARMIN_SECRET_STRING_CN }} --is-cn
+
+      # # 纯 GPX 文件同步（从 GPX_OUT 目录导入 .gpx 文件）
+      - name: Run sync Only GPX script
+        if: env.RUN_TYPE == 'only_gpx'
+        run: |
+          python run_page/gpx_sync.py
+
+      # # 纯 FIT 文件同步（从 FIT_OUT 目录导入 .fit 文件）
+      - name: Run sync Only FIT script
+        if: env.RUN_TYPE == 'only_fit'
+        run: |
+          python run_page/fit_sync.py
+
+      # # 纯 TCX 文件同步（从 TCX_OUT 目录导入 .tcx 文件）
+      - name: Run sync Only TCX script
+        if: env.RUN_TYPE == 'only_tcx'
+        run: |
+          python run_page/tcx_sync.py
+
+      # # Garmin 国服 → Strava 数据迁移
+      - name: Run sync Garmin-cn to Strava(Run with Garmin data backup in Strava)
+        if: env.RUN_TYPE == 'garmin_to_strava_cn'
+        run: |
+          python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_SECRET_STRING_CN }}  --is-cn
+
+      # # Garmin 国际服 → Strava 数据迁移
+      - name: Run sync Garmin to Strava(Run with Garmin data backup in Strava)
+        if: env.RUN_TYPE == 'garmin_to_strava'
+        run: |
+          python run_page/garmin_to_strava_sync.py ${{ secrets.STRAVA_CLIENT_ID }} ${{ secrets.STRAVA_CLIENT_SECRET }} ${{ secrets.STRAVA_CLIENT_REFRESH_TOKEN }}  ${{ secrets.GARMIN_EMAIL }} ${{ secrets.GARMIN_PASSWORD }}
+
+      # # Tulipsport 数据同步
+      - name: Run sync Tulipsport script
+        if: env.RUN_TYPE == 'tulipsport'
+        run: |
+          python run_page/tulipsport_sync.py ${{ secrets.TULIPSPORT_TOKEN }} --with-gpx
+
+
+      # --- 推送变更到仓库（仅在未使用缓存时执行） ---
+      # 当 SAVE_DATA_IN_GITHUB_CACHE=false 时，同步产生的数据文件会通过 git push 提交到仓库
+      - name: Push new runs
+        if: env.SAVE_DATA_IN_GITHUB_CACHE != 'true'
+        run: |
+          git config --local user.email "${{ env.GITHUB_EMAIL }}"
+          git config --local user.name "${{ env.GITHUB_NAME }}"
+          git add .
+          git commit -m 'Add new workouts' || echo "nothing to commit"
+          git push || echo "nothing to push"
+
+  # ──────────────────────────────────────────────────────────
+  # Job 2: 构建并发布 GitHub Pages
+  # 依赖 sync job 成功完成，且 BUILD_GH_PAGES 不为 false
+  # ──────────────────────────────────────────────────────────
+  publish_github_pages:
+    # 使用 env.BUILD_GH_PAGES 环境变量（而非 vars 上下文），
+    # 确保与文件头部 env 定义保持一致，无需额外在 GitHub 仓库设置中配置变量
+    if: needs.sync.result == 'success' && env.BUILD_GH_PAGES != 'false'
+    name: Build and publish Github Pages
+    uses: ./.github/workflows/gh-pages.yml
+    with:
+      save_data_in_github_cache: true
+      data_cache_prefix: 'track_data'
+    needs:
+      - sync
