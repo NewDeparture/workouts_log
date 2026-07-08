@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Activity, SportFilter } from '../types'
-import { WORKOUT_TYPES } from '../types'
+import { isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
 
 // Canonical province extraction — handles all 3 location_country formats,
 // only returns Chinese provinces (filters out foreign locations).
@@ -52,10 +52,14 @@ export function useFilteredActivities(
 ) {
   return useMemo(() => {
     let filtered = activities
-    if (filter === 'Gym') {
-      filtered = filtered.filter((a) => (WORKOUT_TYPES as string[]).includes(a.type))
-    } else if (filter !== 'all') {
-      filtered = filtered.filter((a) => a.type === filter)
+    if (filter === 'Run') {
+      filtered = filtered.filter((a) => isRunType(a.type))
+    } else if (filter === 'Ride') {
+      filtered = filtered.filter((a) => isRideType(a.type))
+    } else if (filter === 'Hike') {
+      filtered = filtered.filter((a) => isHikeType(a.type))
+    } else if (filter === 'Gym') {
+      filtered = filtered.filter((a) => isGymType(a.type))
     }
     if (year) {
       filtered = filtered.filter((a) => {

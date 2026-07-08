@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { LogOut } from 'lucide-react'
 import type { SportFilter, Activity } from '../types'
-import { WORKOUT_TYPES } from '../types'
+import { isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
 import { useLocale } from '../hooks/useLocale'
 import { useGitHubAuthContext } from '../hooks/useGitHubAuthContext'
 
@@ -123,8 +123,10 @@ function GitHubAuthDropdown() {
 export function Header({ filter, setFilter, dark, toggleTheme, activities, page, onNavigate }: HeaderProps) {
   const { locale, setLocale, t } = useLocale()
 
-  const existingTypes = new Set(activities.map((a) => a.type))
-  const hasGym = WORKOUT_TYPES.some((t) => existingTypes.has(t))
+  const hasRun = activities.some((a) => isRunType(a.type))
+  const hasRide = activities.some((a) => isRideType(a.type))
+  const hasHike = activities.some((a) => isHikeType(a.type))
+  const hasGym = activities.some((a) => isGymType(a.type))
 
   const allTabs: { label: string; value: SportFilter }[] = [
     { label: t('all'), value: 'all' },
@@ -135,8 +137,11 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
   ]
   const tabs = allTabs.filter((tab) => {
     if (tab.value === 'all') return true
+    if (tab.value === 'Run') return hasRun
+    if (tab.value === 'Ride') return hasRide
+    if (tab.value === 'Hike') return hasHike
     if (tab.value === 'Gym') return hasGym
-    return existingTypes.has(tab.value)
+    return false
   })
 
   const navItems: { label: string; page: Page }[] = [

@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { Activity } from '../types'
-import { WORKOUT_TYPES } from '../types'
 import { parseMovingTime, getAvailableYears } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
+import { typeLabel, typeColor, isGymType } from '../sportMeta'
 
 interface WorkoutPageProps {
   activities: Activity[]
@@ -22,26 +22,6 @@ function formatSecs(secs: number): string {
   const m = Math.floor((secs % 3600) / 60)
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
-}
-
-function typeLabel(type: string, locale: string): string {
-  const map: Record<string, { zh: string; en: string }> = {
-    WeightTraining: { zh: '力量训练', en: 'Weight Training' },
-    Workout:        { zh: '综合训练', en: 'Workout' },
-    StairStepper:   { zh: '楼梯机', en: 'Stair Stepper' },
-    WaterSport:     { zh: '水上运动', en: 'Water Sport' },
-  }
-  return map[type]?.[locale as 'zh' | 'en'] ?? type
-}
-
-function typeColor(type: string): string {
-  const colors: Record<string, string> = {
-    WeightTraining: '#f97316',
-    Workout:        '#a855f7',
-    StairStepper:   '#3b82f6',
-    WaterSport:     '#06b6d4',
-  }
-  return colors[type] ?? '#6b7280'
 }
 
 // Dumbbell icon
@@ -150,7 +130,7 @@ export function WorkoutPage({ activities, onBack }: WorkoutPageProps) {
   const [selectedType, setSelectedType] = useState<string>('all')
 
   const workouts = useMemo(
-    () => activities.filter(a => (WORKOUT_TYPES as string[]).includes(a.type)),
+    () => activities.filter(a => isGymType(a.type)),
     [activities]
   )
 
@@ -170,11 +150,12 @@ export function WorkoutPage({ activities, onBack }: WorkoutPageProps) {
 
   // Per-type breakdown
   const typeBreakdown = useMemo(() => {
-    return WORKOUT_TYPES.map(t => ({
+    const types = Array.from(new Set(workouts.map(a => a.type)))
+    return types.map(t => ({
       type: t,
       count: workouts.filter(a => a.type === t).length,
       secs: workouts.filter(a => a.type === t).reduce((s, a) => s + parseTime(a.moving_time), 0),
-    })).filter(t => t.count > 0)
+    }))
   }, [workouts])
 
   // Monthly cadence for the selected year (or current year)

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { Activity, SportFilter } from '../types'
-import { WORKOUT_TYPES } from '../types'
 import { formatDuration, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
+import { typeIcon, typeLabel, typeColor, isGymType } from '../sportMeta'
 
 interface ActivityLogProps {
   activities: Activity[]
@@ -18,38 +18,7 @@ const PAGE_SIZE = 16
 
 type DistanceFilter = 'all' | '10' | '20' | '40'
 
-function typeIcon(type: string): string {
-  const icons: Record<string, string> = {
-    Run: '🏃',
-    Ride: '🚴',
-    Hike: '🥾',
-    WeightTraining: '🏋️',
-    Workout: '💪',
-    StairStepper: '🪜',
-    WaterSport: '🏊',
-  }
-  return icons[type] ?? '📌'
-}
 
-function typeLabel(type: string, locale: string): string {
-  const map: Record<string, { zh: string; en: string }> = {
-    WeightTraining: { zh: '力量', en: 'Weights' },
-    Workout:        { zh: '训练', en: 'Workout' },
-    StairStepper:   { zh: '楼梯', en: 'Stairs' },
-    WaterSport:     { zh: '水上', en: 'Water' },
-  }
-  return map[type]?.[locale as 'zh' | 'en'] ?? type
-}
-
-function typeColor(type: string): string {
-  const colors: Record<string, string> = {
-    WeightTraining: '#f97316',
-    Workout:        '#c026d3',
-    StairStepper:   '#3b82f6',
-    WaterSport:     '#06b6d4',
-  }
-  return colors[type] ?? 'var(--color-accent)'
-}
 
 function parseTimeSecs(t: string): number {
   if (!t) return 0
@@ -107,7 +76,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const pageData = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  const gymTypes = WORKOUT_TYPES.filter(t => activities.some(a => a.type === t))
+  const gymTypes = Array.from(new Set(activities.filter(a => isGymType(a.type)).map(a => a.type)))
 
   const logTitle = filter === 'Run'  ? (locale === 'zh' ? '跑步记录' : 'Run Log')
     : filter === 'Ride' ? (locale === 'zh' ? '骑行记录' : 'Ride Log')

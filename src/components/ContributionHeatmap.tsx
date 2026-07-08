@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import type { Activity, SportFilter } from '../types'
-import { WORKOUT_TYPES } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { BrandingBar } from './BrandingBar'
+import { typeIcon, typeLabel, typeColor, isGymType } from '../sportMeta'
 
 const MAX_VISIBLE_YEARS = 10
 
@@ -53,28 +53,7 @@ function getColorAll(typeRatio: number, displayType: string): string {
   return palette[level - 1] ?? palette[0]
 }
 
-function typeIcon(type: string): string {
-  const icons: Record<string, string> = {
-    Run: '🏃',
-    Ride: '🚴',
-    Hike: '🥾',
-  }
-  return icons[type] ?? '📌'
-}
 
-function typeLabel(type: string, locale: string): string {
-  const map: Record<string, { zh: string; en: string }> = {
-    Run:      { zh: '跑步', en: 'Run' },
-    Ride:     { zh: '骑行', en: 'Ride' },
-    Hike:     { zh: '徒步', en: 'Hike' },
-    Training: { zh: '训练', en: 'Training' },
-    WeightTraining: { zh: '力量训练', en: 'Weight Training' },
-    Workout:        { zh: '综合训练', en: 'Workout' },
-    StairStepper:   { zh: '楼梯机',   en: 'Stair Stepper' },
-    WaterSport:     { zh: '水上运动', en: 'Water Sport' },
-  }
-  return map[type]?.[locale as 'zh' | 'en'] ?? type
-}
 
 // Dominant display type for a day (by distance; Training is fallback)
 function dominantDisplayType(acts: Activity[]): 'Run' | 'Ride' | 'Hike' | 'Training' {
@@ -197,19 +176,13 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
         const d = new Date(a.start_date_local)
         return d.getFullYear() === selectedYear && d.getMonth() === m
       })
+      const gymActs = monthActs.filter(a => isGymType(a.type))
       const byType = Object.fromEntries(
-        WORKOUT_TYPES.map(t => [t, monthActs.filter(a => a.type === t).length])
+        [...new Set(gymActs.map(a => a.type))].map(t => [t, gymActs.filter(a => a.type === t).length])
       )
-      return { month: m, total: monthActs.length, byType }
+      return { month: m, total: gymActs.length, byType }
     })
   }, [activities, selectedYear, isGym])
-
-  const gymTypeColors: Record<string, string> = {
-    WeightTraining: '#f97316',
-    Workout:        '#c026d3',
-    StairStepper:   '#3b82f6',
-    WaterSport:     '#06b6d4',
-  }
 
   const heatmapTitle = filter === 'Run'  ? (locale === 'zh' ? '跑步热力图' : 'Run Heatmap')
     : filter === 'Ride' ? (locale === 'zh' ? '骑行热力图' : 'Ride Heatmap')
@@ -580,9 +553,9 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
                   <div className="w-full flex items-end justify-center" style={{ height: '52px' }}>
                     {m.total > 0 && (
                       <div className="w-full rounded-t-sm relative overflow-hidden" style={{ height: `${barH}px` }}>
-                        {WORKOUT_TYPES.filter(t => m.byType[t] > 0).map((t) => {
+                        {Object.keys(m.byType).filter(t => m.byType[t] > 0).map((t) => {
                           const segPct = (m.byType[t] / m.total) * 100
-                          return <div key={t} className="w-full" style={{ height: `${segPct}%`, backgroundColor: gymTypeColors[t] }} />
+                          return <div key={t} className="w-full" style={{ height: `${segPct}%`, backgroundColor: typeColor(t) }} />
                         })}
                         <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-[var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                           {m.total}
@@ -598,9 +571,9 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
             })}
           </div>
           <div className="flex items-center gap-4 mt-2 flex-wrap">
-            {WORKOUT_TYPES.filter(t => activities.some(a => a.type === t)).map(t => (
+            {Array.from(new Set(activities.filter(a => isGymType(a.type)).map(a => a.type))).map(t => (
               <span key={t} className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
-                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: gymTypeColors[t] }} />
+                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: typeColor(t) }} />
                 {typeLabel(t, locale)}
               </span>
             ))}
