@@ -49,8 +49,9 @@ goals:
 # GitHub OAuth App 的 Client ID（Device Flow 不需要 client_secret，client_id 可公开）
 # 注册地址：https://github.com/settings/applications/new
 # Authorization callback URL 填写你的站点域名即可（Device Flow 不实际使用 callback）
-githubClientId: 'Ov23liIA4gcZ3hXZkJnP'
+githubClientId: 'Ov23liYifJWv0NVioZs3'
 
 # 打卡数据存储位置（当前 repo），格式：username/repo-name
-repoOwner: 'zhaohongxuan'
-repoName: 'workouts'
+# 请修改为你的 GitHub 用户名和仓库名
+repoOwner: 'LYX'              # TODO: 替换为你的 GitHub 用户名
+repoName: 'workouts_log'      # TODO: 替换为你的仓库名

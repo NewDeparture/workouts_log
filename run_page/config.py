@@ -31,29 +31,33 @@ UTC_TIMEZONE = "UTC"
 start_point = namedtuple("start_point", "lat lon")
 run_map = namedtuple("polyline", "summary_polyline")
 
-TYPE_DICT = {
-    "running": "Run",
-    "RUN": "Run",
-    "Run": "Run",
-    "cycling": "Ride",
-    "CYCLING": "Ride",
-    "Ride": "Ride",
-    "indoor_cycling": "Indoor Ride",
-    "walking": "Hike",
-    "hiking": "Hike",
-    "Walk": "Hike",
-    "Hike": "Hike",
-    "Swim": "Swim",
-    "rowing": "Rowing",
-    "RoadTrip": "RoadTrip",
-    "flight": "Flight",
-}
+# 旧版 TYPE_DICT（已被下方新版覆盖，保留供参考）
+# TYPE_DICT = {
+#     "running": "Run",
+#     "RUN": "Run",
+#     "Run": "Run",
+#     "cycling": "Ride",
+#     "CYCLING": "Ride",
+#     "Ride": "Ride",
+#     "indoor_cycling": "Indoor Ride",
+#     "walking": "Hike",
+#     "hiking": "Hike",
+#     "Walk": "Hike",
+#     "Hike": "Hike",
+#     "Swim": "Swim",
+#     "rowing": "Rowing",
+#     "RoadTrip": "RoadTrip",
+#     "flight": "Flight",
+# }
 
-MAPPING_TYPE = ["Hike", "Walk", "Ride", "Rowing", "Run", "Swim", "RoadTrip"]
+# 旧版 MAPPING_TYPE（已被下方新版覆盖，保留供参考）
+# MAPPING_TYPE = ["Hike", "Walk", "Ride", "Rowing", "Run", "Swim", "RoadTrip"]
 
 
+# 加载用户配置文件（config.yml）
+# 注意：配置文件为 config.yml，不是 config.yaml
 try:
-    with open("config.yaml") as f:
+    with open("config.yml") as f:
         _config = yaml.safe_load(f)
 except:
     _config = {}
@@ -92,7 +96,6 @@ TYPE_DICT = {
     "walking": "Hike",
     "Walk": "Hike",
     "hiking": "Hike",
-    "Walk": "Hike",
     "Hike": "Hike",
     "Swim": "Swim",
     "swimming": "Swim",
@@ -105,7 +108,6 @@ TYPE_DICT = {
     "Snowboard": "Snowboard",
     "resort_skiing_snowboarding_ws": "Ski",  # garmin
     "AlpineSki": "Ski",  # strava
-    "Ski": "Ski",
     "Ski": "Ski",
 }
 
