@@ -64,12 +64,25 @@ class Coros:
                 "accesstoken": access_token,
                 "cookie": f"CPL-coros-region=2; CPL-coros-token={access_token}",
             }
-            self.is_only_running = is_only_running
+            # self.is_only_running = is_only_running  # 死代码，从未被读取，会导致 NameError
+        # 复用已有的异步 client 并刷新其请求头，而不是新建一个（避免连接泄漏），
+        # 这样 login() 可以在会话中途用来续期已过期的 token。
+        if self.req is None:
             self.req = httpx.AsyncClient(timeout=TIME_OUT, headers=self.headers)
-        await client.aclose()
+        else:
+            self.req.headers.update(self.headers)
 
     async def init(self):
         await self.login()
+
+    async def _refresh_token(self):
+        """重新登录以续期 access token；成功返回 True。"""
+        try:
+            await self.login()
+            return True
+        except Exception as exc:
+            print(f"Failed to refresh COROS token: {exc}")
+            return False
 
     async def fetch_activity_ids_types(self, only_run):
         page_number = 1
@@ -94,7 +107,7 @@ class Coros:
 
         return all_activities_ids_types
 
-    async def download_activity(self, label_id, sport_type, file_type):
+    async def download_activity(self, label_id, sport_type, file_type, max_retries=3):
         if sport_type == 101 and file_type == "gpx":
             print(
                 f"Sport type {sport_type} is not supported in {file_type} file. The activity will be ignored"
@@ -108,29 +121,54 @@ class Coros:
         file_url = None
         fname = ""
         file_path = ""
-        try:
-            response = await self.req.post(download_url)
-            resp_json = response.json()
-            file_url = resp_json.get("data", {}).get("fileUrl")
-            if not file_url:
-                print(f"No file URL found for label_id {label_id}")
-                return None, None
+        # 重试循环：应对 token 过期（401）以及大文件下载时常见的
+        # 网络/超时等瞬时错误。
+        for attempt in range(max_retries):
+            try:
+                response = await self.req.post(download_url)
+                if response.status_code == 401:
+                    print(f"Token expired for label_id {label_id}, refreshing (retry {attempt + 1})")
+                    if not await self._refresh_token():
+                        break
+                    continue
+                resp_json = response.json()
+                file_url = resp_json.get("data", {}).get("fileUrl")
+                if not file_url:
+                    print(f"No file URL found for label_id {label_id}")
+                    return None, None
 
-            fname = os.path.basename(file_url)
-            file_path = os.path.join(download_folder, fname)
+                fname = os.path.basename(file_url)
+                file_path = os.path.join(download_folder, fname)
 
-            async with self.req.stream("GET", file_url) as response:
-                response.raise_for_status()
-                async with aiofiles.open(file_path, "wb") as f:
-                    async for chunk in response.aiter_bytes():
-                        await f.write(chunk)
-            return label_id, fname
-        except httpx.HTTPStatusError as exc:
-            print(
-                f"Failed to download {file_url} with status code {response.status_code}: {exc}"
-            )
-        except Exception as exc:
-            print(f"Error occurred while downloading {file_url}: {exc}")
+                # 大文件使用更长的读取超时；必要时会先刷新 token
+                stream_timeout = httpx.Timeout(600.0, connect=360.0)
+                async with self.req.stream("GET", file_url, timeout=stream_timeout) as stream_resp:
+                    stream_resp.raise_for_status()
+                    async with aiofiles.open(file_path, "wb") as f:
+                        async for chunk in stream_resp.aiter_bytes():
+                            await f.write(chunk)
+                return label_id, fname
+            except httpx.HTTPStatusError as exc:
+                status = getattr(exc.response, "status_code", None)
+                print(f"HTTP {status} error downloading {file_url}: {exc}")
+                # 仅在鉴权错误（401）时刷新 token 并重试
+                if status == 401 and attempt < max_retries - 1:
+                    if not await self._refresh_token():
+                        break
+                    continue
+                break
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                # 瞬时网络/超时错误（大文件常见）-> 重试
+                print(f"Transient error downloading {file_url} (attempt {attempt + 1}): {exc}")
+                if attempt < max_retries - 1:
+                    if not await self._refresh_token():
+                        break
+                    continue
+                break
+            except Exception as exc:
+                print(f"Error occurred while downloading {file_url}: {exc}")
+                break
+        # 清理任何只下载了部分的（损坏的）文件
         if file_path and os.path.exists(file_path):
             print(f"Delete the corrupted fit file: {fname}")
             os.remove(file_path)
