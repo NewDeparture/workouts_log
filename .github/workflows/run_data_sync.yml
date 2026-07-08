@@ -41,7 +41,7 @@ env:
   # --- 缓存与部署 ---
   SAVE_DATA_IN_GITHUB_CACHE: true   # 使用 GitHub Cache 存储数据（Vercel 部署建议开启）
   DATA_CACHE_PREFIX: 'track_data'    # 缓存键前缀
-  BUILD_GH_PAGES: true              # 是否构建 GitHub Pages（不需要时设为 false）
+  # BUILD_GH_PAGES: true              # 是否构建 GitHub Pages（不需要时设为 false）。env变量不参与job级工作流判断，在此处代码无效
 
 jobs:
   # ──────────────────────────────────────────────────────────
@@ -182,9 +182,7 @@ jobs:
   # 依赖 sync job 成功完成，且 BUILD_GH_PAGES 不为 false
   # ──────────────────────────────────────────────────────────
   publish_github_pages:
-    # 使用 env.BUILD_GH_PAGES 环境变量（而非 vars 上下文），
-    # 确保与文件头部 env 定义保持一致，无需额外在 GitHub 仓库设置中配置变量
-    if: needs.sync.result == 'success' && env.BUILD_GH_PAGES != 'false'
+    if: needs.sync.result == 'success' && vars.BUILD_GH_PAGES != 'false'
     name: Build and publish Github Pages
     uses: ./.github/workflows/gh-pages.yml
     with:
