@@ -1,2 +1,28 @@
-requirements.txt  
-requirements-dev.txt  
+requirements.txt
+requirements-dev.txt
+
+# Python backend is not deployed to Vercel (frontend-only build)
+run_page/
+pyproject.toml
+pdm.lock
+*.py
+
+# Runtime data (not needed for the frontend build)
+/data/
+/FIT_OUT/
+/GPX_OUT/
+/TCX_OUT/
+/activities/
+imported.json
+run_page/data.db
+
+# Dependencies are reinstalled during build
+node_modules
+
+# Build output (Vercel rebuilds it)
+dist
+
+# Local caches
+.cache
+.DS_Store
+
