@@ -101,7 +101,7 @@ function TrackMap({ activity, activities, dark }: {
     if (!features.length) return
     m.addSource('all-routes', { type: 'geojson', data: { type: 'FeatureCollection', features } })
     m.addLayer({ id: 'all-routes', type: 'line', source: 'all-routes', paint: {
-      'line-color': ['match', ['get', 'type'], 'Run', '#f97316', 'Ride', '#3b82f6', 'Hike', '#22c55e', '#a855f7'],
+      'line-color': ['match', ['get', 'type'], 'Run', '#f97316', 'Ride', '#3b82f6', 'Hike', '#22c55e', 'Walking', '#22c55e', 'Mountaineering', '#22c55e', '#a855f7'],
       'line-width': 1.2, 'line-opacity': 0.5,
     }})
     const allCoords = features.flatMap(f => f.geometry.coordinates as [number, number][])
@@ -138,7 +138,7 @@ function TrackMap({ activity, activities, dark }: {
 function getColor(a: Activity): string {
   if (a.type === 'Run') { const km = a.distance / 1000; return km >= 40 ? '#ef4444' : km >= 20 ? '#f97316' : '#f97316' }
   if (a.type === 'Ride') return '#3b82f6'
-  if (a.type === 'Hike') return '#22c55e'
+  if (a.type === 'Hike' || a.type === 'Walking' || a.type === 'Mountaineering') return '#22c55e'
   return '#a855f7'
 }
 

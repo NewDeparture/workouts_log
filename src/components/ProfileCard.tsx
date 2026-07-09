@@ -4,6 +4,7 @@ import type { Activity, SportFilter } from '../types'
 import { useLocale } from '../hooks/useLocale'
 import { useGitHubAuthContext } from '../hooks/useGitHubAuthContext'
 import { formatDistance, parseMovingTime, extractProvince } from '../hooks/useActivities'
+import { typeIcon } from '../sportMeta'
 import rawConfig from '@config'
 
 const config = rawConfig as { repoOwner?: string; repoName?: string }
@@ -264,7 +265,7 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
             </div>
           </div>
           <p className="text-sm font-medium">
-            {latest.type === 'Run' ? '🏃 ' : latest.type === 'Ride' ? '🚴 ' : '🏋️ '}
+            {typeIcon(latest.type)}
             {latest.name || (latest.type === 'Run' ? 'Run' : 'Ride')}
             <span className="text-[var(--color-muted)] font-normal"> · {formatDistance(latest.distance)} km · {formatDate(latest.start_date_local)}</span>
           </p>

@@ -19,7 +19,7 @@ interface HeatmapProps {
 function toDisplayType(type: string): 'Run' | 'Ride' | 'Hike' | 'Training' {
   if (type === 'Run') return 'Run'
   if (type === 'Ride') return 'Ride'
-  if (type === 'Hike') return 'Hike'
+  if (type === 'Hike' || type === 'Walking' || type === 'Mountaineering') return 'Hike'
   return 'Training'
 }
 

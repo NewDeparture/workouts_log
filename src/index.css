@@ -27,6 +27,7 @@
 [data-filter="Run"] { --color-accent: #f97316; }
 [data-filter="Ride"] { --color-accent: #3b82f6; }
 [data-filter="Hike"] { --color-accent: #22c55e; }
+[data-filter="Gym"] { --color-accent: #a855f7; }
 
 body {
   background-color: var(--color-bg);

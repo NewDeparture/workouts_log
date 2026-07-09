@@ -93,10 +93,11 @@ TYPE_DICT = {
     "VirtualRide": "VirtualRide",
     "indoor_cycling": "Indoor Ride",
     "Indoor Bike ": "Indoor Ride",
-    "walking": "Hike",
-    "Walk": "Hike",
+    "walking": "Walking",
+    "Walk": "Walking",
     "hiking": "Hike",
     "Hike": "Hike",
+    "mountaineering": "Mountaineering",
     "Swim": "Swim",
     "swimming": "Swim",
     "Pool Swim": "Swim",
@@ -109,10 +110,14 @@ TYPE_DICT = {
     "resort_skiing_snowboarding_ws": "Ski",  # garmin
     "AlpineSki": "Ski",  # strava
     "Ski": "Ski",
+    "training": "Training",
+    "generic": "Training",
 }
 
 MAPPING_TYPE = [
     "Hike",
+    "Walking",
+    "Mountaineering",
     "Ride",
     "Run",
     "Trail Run",
@@ -125,6 +130,7 @@ MAPPING_TYPE = [
     "Workout",
     "StairStepper",
     "WaterSport",
+    "Training",
 ]
 
 STRAVA_GARMIN_TYPE_DICT = {

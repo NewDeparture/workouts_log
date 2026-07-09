@@ -175,15 +175,11 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
               >
                 <td className="py-3 text-[var(--color-muted)]">{a.start_date_local.slice(0, 16).replace('T', ' ')}</td>
                 <td className="py-3">
-                  {isGym ? (
-                    <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeColor(a.type) + '22', color: typeColor(a.type) }}>
-                      {typeIcon(a.type)} {typeLabel(a.type, locale)}
-                    </span>
-                  ) : (
-                    <span className="text-[var(--color-muted)]">{typeIcon(a.type)} {a.type}</span>
-                  )}
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeColor(a.type) + '22', color: typeColor(a.type) }}>
+                    {typeIcon(a.type)} {typeLabel(a.type, locale)}
+                  </span>
                 </td>
-                <td className="py-3">{a.name || (a.type === 'Run' ? t('run') : t('ride'))}</td>
+                <td className="py-3">{a.name || typeLabel(a.type, locale)}</td>
                 {isGym ? (
                   <>
                     <td className="py-3 font-mono font-medium">{formatSecs(parseTimeSecs(a.moving_time))}</td>

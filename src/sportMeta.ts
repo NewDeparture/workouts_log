@@ -15,6 +15,8 @@ export const SPORT_META: Record<string, SportMeta> = {
   VirtualRide:    { icon: '🚴', zh: '虚拟骑行', en: 'Virtual Ride', color: '#2563eb' },
   'Indoor Ride':  { icon: '🚴', zh: '室内骑行', en: 'Indoor Ride',  color: '#1d4ed8' },
   Hike:           { icon: '🥾', zh: '徒步',     en: 'Hike',         color: '#22c55e' },
+  Walking:        { icon: '🚶', zh: '步行',     en: 'Walking',      color: '#16a34a' },
+  Mountaineering: { icon: '⛰️', zh: '登山',     en: 'Mountaineering', color: '#15803d' },
   Swim:           { icon: '🏊', zh: '游泳',     en: 'Swim',         color: '#06b6d4' },
   Rowing:         { icon: '🚣', zh: '划船',     en: 'Rowing',       color: '#0891b2' },
   RoadTrip:       { icon: '🚗', zh: '驾车',     en: 'Road Trip',    color: '#64748b' },
@@ -33,30 +35,39 @@ export const SPORT_META: Record<string, SportMeta> = {
 // ---- 运动大类：RUN / RIDE / HIKE 各自包含其全部子类型，其余一切类型均归入 GYM ----
 export type SportCategory = 'run' | 'ride' | 'hike' | 'gym'
 
+// 仅保留系统实际产出的规范类型（TYPE_DICT 归一化值 + MAPPING_TYPE 直通类型）。
+// 被归一化掉的原始键（EBikeRide / Mountain Bike）及管道从不产出的推测键
+// （Treadmill Run / treadmill_running / Indoor Run / Mountain Run / Power Walk / power_walking）
+// 均不可达，已从本表删除；它们到达前端时只会是规范化后的 Ride / Hike 等。
 export const SPORT_CATEGORY: Record<string, SportCategory> = {
-  // 跑步：户外跑、运动场跑、跑步机、越野跑、山地跑等
+  // 跑步类
   Run: 'run',
   'Trail Run': 'run',
-  'Treadmill Run': 'run',
-  'treadmill_running': 'run',
-  'Indoor Run': 'run',
-  'Mountain Run': 'run',
-  // 骑行：公路、室内、虚拟、山地、电助力等
+  // 骑行类
   Ride: 'ride',
   'Indoor Ride': 'ride',
-  'VirtualRide': 'ride',
-  'EBikeRide': 'ride',
-  'Mountain Bike': 'ride',
-  // 徒步：走路、健走、徒步、登山等
+  VirtualRide: 'ride',
+  // 徒步类（含步行、登山）
   Hike: 'hike',
-  'Power Walk': 'hike',
-  'power_walking': 'hike',
-  'Mountaineering': 'hike',
-  'mountaineering': 'hike',
+  Walking: 'hike',
+  Mountaineering: 'hike',
 }
 
 export function categoryOf(type: string): SportCategory {
   return SPORT_CATEGORY[type] ?? 'gym'
+}
+
+// 四大分类的主题色，需与 index.css 中 [data-filter] 的 --color-accent 保持一致。
+// 轨迹、地图等需要按"分类"而非"具体类型"着色时统一使用本表。
+export const CATEGORY_COLOR: Record<SportCategory, string> = {
+  run: '#f97316',
+  ride: '#3b82f6',
+  hike: '#22c55e',
+  gym: '#a855f7',
+}
+
+export function categoryColorOf(type: string): string {
+  return CATEGORY_COLOR[categoryOf(type)]
 }
 
 export const isRunType = (t: string) => categoryOf(t) === 'run'

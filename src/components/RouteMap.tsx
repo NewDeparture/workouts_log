@@ -3,6 +3,7 @@ import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import * as polyline from '@mapbox/polyline'
 import type { Activity } from '../types'
+import { categoryColorOf } from '../sportMeta'
 
 const MAPBOX_TOKEN =
   'pk.eyJ1IjoiYmVuLTI5IiwiYSI6ImNrZ3Q4Ym9mMDBqMGYyeXFvODV2dWl6YzQifQ.gSKoWF-fMjhzU67TuDezJQ'
@@ -88,7 +89,7 @@ export function RouteMap({ activities, selectedActivity, dark, onClearSelection 
         type: 'line',
         source: 'selected',
         paint: {
-          'line-color': selectedActivity.type === 'Run' ? '#f97316' : '#3b82f6',
+          'line-color': categoryColorOf(selectedActivity.type),
           'line-width': 3,
           'line-opacity': 0.9,
         },
@@ -136,7 +137,11 @@ export function RouteMap({ activities, selectedActivity, dark, onClearSelection 
           'match',
           ['get', 'type'],
           'Run', '#f97316',
+          'Trail Run', '#f97316',
           'Ride', '#3b82f6',
+          'Hike', '#22c55e',
+          'Walking', '#22c55e',
+          'Mountaineering', '#22c55e',
           '#a855f7',
         ],
         'line-width': 1.5,
