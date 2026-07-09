@@ -32,7 +32,6 @@ export default function App() {
 
   const years = getAvailableYears(activities)
   const filtered = useFilteredActivities(activities, filter, year)
-  const heatmapYear = year ?? years[0] ?? new Date().getFullYear()
 
   // Activities filtered to the selected province (for RouteMap)
   const provinceFiltered = useMemo(() => {
@@ -69,7 +68,7 @@ export default function App() {
           {/* Left column */}
           <div className="space-y-6 min-w-0 overflow-hidden">
             <StatsCards activities={filtered} allActivities={activities} year={year} filter={filter} onSelectActivity={setSelectedActivity} />
-            <ContributionHeatmap activities={filtered} year={heatmapYear} filter={filter} onSelectActivity={setSelectedActivity} />
+            <ContributionHeatmap activities={filtered} year={year} setYear={setYear} filter={filter} onSelectActivity={setSelectedActivity} />
             <ActivityLog
               activities={filtered}
               years={years}

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import type { Activity, SportFilter } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
@@ -10,7 +10,8 @@ const MAX_VISIBLE_YEARS = 10
 
 interface HeatmapProps {
   activities: Activity[]
-  year: number
+  year: number | null
+  setYear?: (y: number | null) => void
   filter: SportFilter
   onSelectActivity?: (a: Activity | null) => void
 }
@@ -62,12 +63,21 @@ function dominantDisplayType(acts: Activity[]): 'Run' | 'Ride' | 'Hike' | 'Train
   return toDisplayType(sorted[0].type)
 }
 
-export function ContributionHeatmap({ activities, year: defaultYear, filter, onSelectActivity }: HeatmapProps) {
+export function ContributionHeatmap({ activities, year, setYear, filter, onSelectActivity }: HeatmapProps) {
   const { t, locale } = useLocale()
   const allYears = getAvailableYears(activities)
-  const [selectedYear, setSelectedYear] = useState<number | 'all'>(defaultYear)
+  // 年份与 Activity Log 共享同一来源（App 的 year）：null = 全部，否则为具体年份
+  const selectedYear: number | 'all' = year === null ? 'all' : year
   // yearWindowEnd: index into allYears of the last visible year (0-based, most-recent-first)
   const [yearWindowEnd, setYearWindowEnd] = useState(Math.min(MAX_VISIBLE_YEARS - 1, allYears.length - 1))
+
+  // 当外部（如 Activity Log）切换年份时，让所选年份进入可见窗口并高亮
+  useEffect(() => {
+    if (year === null) return
+    const idx = allYears.indexOf(year)
+    if (idx < 0) return
+    setYearWindowEnd(Math.min(Math.max(idx, MAX_VISIBLE_YEARS - 1), allYears.length - 1))
+  }, [year, allYears])
   const captureRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -152,7 +162,7 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
       return allYears.map(yr => ({ year: yr, ...buildYearGrid(yr, activities) }))
     }
     return [{ year: selectedYear, ...buildYearGrid(selectedYear, activities) }]
-  }, [activities, selectedYear, filter])
+  }, [activities, year, filter])
 
   const dayLabels = locale === 'zh' ? ['', '一', '', '三', '', '五', ''] : ['', 'M', '', 'W', '', 'F', '']
 
@@ -166,7 +176,7 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
         .map(a => toDisplayType(a.type))
     )
     return (['Run', 'Ride', 'Hike', 'Training'] as const).filter(t => types.has(t))
-  }, [activities, selectedYear, isAll])
+  }, [activities, year, isAll])
 
   // Gym: monthly session breakdown
   const gymMonthlyData = useMemo(() => {
@@ -182,7 +192,7 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
       )
       return { month: m, total: gymActs.length, byType }
     })
-  }, [activities, selectedYear, isGym])
+  }, [activities, year, isGym])
 
   const heatmapTitle = filter === 'Run'  ? (locale === 'zh' ? '跑步热力图' : 'Run Heatmap')
     : filter === 'Ride' ? (locale === 'zh' ? '骑行热力图' : 'Ride Heatmap')
@@ -191,7 +201,7 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
     : t('heatmapTitle')
 
   const handleSelectYear = (yr: number | 'all') => {
-    setSelectedYear(yr)
+    setYear?.(yr === 'all' ? null : yr)
   }
 
   // Visible year window
@@ -259,7 +269,7 @@ export function ContributionHeatmap({ activities, year: defaultYear, filter, onS
       }
     }
     return { count, distance, time, typeStats }
-  }, [yearData, selectedYear])
+  }, [yearData, year])
 
   return (
     <div ref={captureRef} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 overflow-x-auto">
