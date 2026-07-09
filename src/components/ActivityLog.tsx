@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { Activity, SportFilter } from '../types'
-import { formatDuration, formatPace } from '../hooks/useActivities'
+import { formatDuration, formatPace, formatSwimPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { typeIcon, typeLabel, typeColor, isGymType } from '../sportMeta'
 
@@ -16,7 +16,7 @@ interface ActivityLogProps {
 
 const PAGE_SIZE = 16
 
-type DistanceFilter = 'all' | '10' | '20' | '40'
+type DistanceFilter = 'all' | '5' | '10' | '20' | '40'
 
 
 
@@ -48,8 +48,9 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
     if (isGym) return true
     const km = a.distance / 1000
     switch (distFilter) {
-      case '10': return km >= 10 && km < 20
-      case '20': return km >= 20 && km < 40
+      case '5': return km >= 5
+      case '10': return km >= 10
+      case '20': return km >= 20
       case '40': return km >= 40
       default: return true
     }
@@ -72,6 +73,11 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
       }
     }
   }, [selectedActivity?.run_id])
+
+  // 切换运动类型（filter）时把页码重置到第一页，避免停留在上一类型遗留的越界页码
+  useEffect(() => {
+    setPage(0)
+  }, [filter])
 
   const totalPages = Math.ceil(sorted.length / PAGE_SIZE)
   const pageData = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -129,7 +135,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         </div>
       ) : (
         <div className="flex items-center gap-2 mb-5">
-          {([['all', t('all')], ['10', '10km+'], ['20', '20km+'], ['40', '40km+']] as [DistanceFilter, string][]).map(([val, label]) => (
+          {([['all', t('all')], ['5', '5km+'], ['10', '10km+'], ['20', '20km+'], ['40', '40km+']] as [DistanceFilter, string][]).map(([val, label]) => (
             <button key={val} onClick={() => { setDistFilter(val); setPage(0) }}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${distFilter === val ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
             >
@@ -192,7 +198,11 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                     </td>
                     <td className="py-3 text-[var(--color-muted)]">{formatDuration(a.moving_time)}</td>
                     <td className="py-3 text-[var(--color-muted)]">
-                      {a.type === 'Run' ? formatPace(a.average_speed) : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
+                      {a.type === 'Run'
+                        ? formatPace(a.average_speed)
+                        : a.type === 'Swim'
+                          ? formatSwimPace(a.average_speed)
+                          : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
                     </td>
                     <td className="py-3 text-[var(--color-muted)]">{a.average_heartrate ? Math.round(a.average_heartrate) : '--'}</td>
                   </>
@@ -205,11 +215,19 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
 
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-border)]">
-        <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
-          className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30 transition-colors">←</button>
+        <div className="flex items-center gap-5">
+          <button onClick={() => setPage(0)} disabled={page === 0}
+            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '首页' : 'First'}>«</button>
+          <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '上一页' : 'Prev'}>‹</button>
+        </div>
         <span className="text-sm text-[var(--color-muted)]">{t('page')} {page + 1} {t('pageOf')} {totalPages} {t('pages')}</span>
-        <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
-          className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30 transition-colors">→</button>
+        <div className="flex items-center gap-5">
+          <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '下一页' : 'Next'}>›</button>
+          <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}
+            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '末页' : 'Last'}>»</button>
+        </div>
       </div>
     </div>
   )

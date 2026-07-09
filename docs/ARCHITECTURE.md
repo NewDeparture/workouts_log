@@ -48,7 +48,7 @@ flowchart LR
 - 前端是**无路由的单页应用**，所有数据构建期静态加载自 `src/static/activities.json`。
 - 全局状态集中在 `App.tsx`：`filter`（运动类型筛选）、`year`（年份）、`selectedActivity`（热力图/地图/列表共享选中项）、`selectedProvince`（省份筛选）、`page`（home/tracks/checkin 三页切换）。
 - `filtered` 数据经 `useFilteredActivities` 计算后传给大部分组件；`ProfileCard` 和 `PersonalBest` 接收未过滤的全量数据以始终展示历史总计。
-- 主题与强调色通过 CSS 变量实现：`data-filter` 属性驱动 `--color-accent`（all=紫、Run=橙、Ride=蓝、Hike=绿、Gym=玫红）。
+- 主题与强调色通过 CSS 变量实现：`<html data-filter>` 属性驱动 `--color-accent`（all=紫、Run=橙、Ride=蓝、Hike=绿、Gym=玫红），并联动 `body` 的运动主题色渐变背景（底色随白天/黑夜切换）。
 
 ## 四、核心功能特性
 

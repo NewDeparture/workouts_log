@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import './index.css'
 import type { Activity, SportFilter } from './types'
 import { useFilteredActivities, getAvailableYears, extractProvince } from './hooks/useActivities'
@@ -25,13 +25,36 @@ type Page = 'home' | 'tracks' | 'checkin'
 export default function App() {
   const { dark, toggle } = useTheme()
   const [filter, setFilter] = useState<SportFilter>('all')
+  const years = getAvailableYears(activities)
+  // Activity Log 的年份：默认“全部”(null)，展示所有运动记录
   const [year, setYear] = useState<number | null>(null)
+  // Activity Heatmap 的展示年份：默认最近一年（单年热力图）
+  const [heatmapDisplayYear, setHeatmapDisplayYear] = useState<number | 'all'>(years[0] ?? 'all')
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [selectedProvince, setSelectedProvince] = useState<string | null>(null)
   const [page, setPage] = useState<Page>('home')
 
-  const years = getAvailableYears(activities)
   const filtered = useFilteredActivities(activities, filter, year)
+  // Heatmap 用「仅按运动类型过滤、不按年份过滤」的全量数据：
+  // 其年份列表永远完整（不会随所选年份塌缩），主体按 heatmapDisplayYear 展示
+  const sportFiltered = useFilteredActivities(activities, filter, null)
+
+  // 将当前运动类型写到 <html data-filter>，驱动 body 渐变背景与全局 --color-accent
+  useEffect(() => {
+    document.documentElement.dataset.filter = filter
+  }, [filter])
+
+  // 联动规则：
+  // 1) Activity Log 选中具体年份 -> Heatmap 跟随；选中 ALL -> Heatmap 保持不变（不响应 ALL）
+  const handleLogSelect = (yr: number | null) => {
+    setYear(yr)
+    if (yr !== null) setHeatmapDisplayYear(yr)
+  }
+  // 2) Activity Heatmap 选中任意年份（含 ALL）-> Activity Log 跟随
+  const handleHeatmapSelect = (yr: number | 'all') => {
+    setHeatmapDisplayYear(yr)
+    setYear(yr === 'all' ? null : yr)
+  }
 
   // Activities filtered to the selected province (for RouteMap)
   const provinceFiltered = useMemo(() => {
@@ -42,7 +65,7 @@ export default function App() {
   return (
     <LocaleProvider>
       <GitHubAuthProvider>
-        <div className="min-h-screen bg-[var(--color-bg)]" data-filter={filter}>
+        <div className="min-h-screen">
       <Header
         filter={filter}
         setFilter={setFilter}
@@ -55,8 +78,8 @@ export default function App() {
 
       {page === 'tracks' ? (
         <TracksPage
-          activities={filtered}
-          filter={filter}
+          activities={activities}
+          dark={dark}
           onSelectActivity={setSelectedActivity}
           onBack={() => setPage('home')}
         />
@@ -68,12 +91,12 @@ export default function App() {
           {/* Left column */}
           <div className="space-y-6 min-w-0 overflow-hidden">
             <StatsCards activities={filtered} allActivities={activities} year={year} filter={filter} onSelectActivity={setSelectedActivity} />
-            <ContributionHeatmap activities={filtered} year={year} setYear={setYear} filter={filter} onSelectActivity={setSelectedActivity} />
+            <ContributionHeatmap activities={sportFiltered} displayYear={heatmapDisplayYear} setDisplayYear={handleHeatmapSelect} filter={filter} onSelectActivity={setSelectedActivity} />
             <ActivityLog
               activities={filtered}
               years={years}
               year={year}
-              setYear={setYear}
+              setYear={handleLogSelect}
               selectedActivity={selectedActivity}
               onSelectActivity={setSelectedActivity}
               filter={filter}

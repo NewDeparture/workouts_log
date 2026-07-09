@@ -140,7 +140,7 @@ export function HeatmapPage({ activities, filter, onSelectActivity, onBack }: He
   const { locale } = useLocale()
   const allYears = getAvailableYears(activities)
   const dayLabels = locale === 'zh' ? ['', '一', '', '三', '', '五', ''] : ['', 'M', '', 'W', '', 'F', '']
-  const [expandedYear, setExpandedYear] = useState<number | null>(null)
+  const [expandedYear, setExpandedYear] = useState<number | null>(allYears[0] ?? null)
 
   const yearData = useMemo(() => {
     return allYears.map((yr) => ({ year: yr, ...buildYearGrid(yr, activities) }))

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Activity } from '../types'
-import { formatDistance, formatDuration, formatPace } from '../hooks/useActivities'
+import { formatDistance, formatDuration, formatPace, formatSwimPace } from '../hooks/useActivities'
 
 interface ActivityListProps {
   activities: Activity[]
@@ -95,7 +95,9 @@ export function ActivityList({ activities }: ActivityListProps) {
                   <td className="py-2 font-mono">
                     {a.type === 'Run'
                       ? formatPace(a.average_speed)
-                      : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
+                      : a.type === 'Swim'
+                        ? formatSwimPace(a.average_speed)
+                        : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
                   </td>
                 </tr>
               ))}
@@ -129,7 +131,9 @@ function ActivityCard({ activity: a }: { activity: Activity }) {
         <span>
           {a.type === 'Run'
             ? formatPace(a.average_speed)
-            : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
+            : a.type === 'Swim'
+              ? formatSwimPace(a.average_speed)
+              : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
         </span>
       </div>
     </div>

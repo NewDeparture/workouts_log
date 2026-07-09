@@ -23,7 +23,7 @@ pnpm data:clean             # Wipe local data files
 The frontend is a single-page React app with no routing. All data is loaded statically from `src/static/activities.json` at build time — there is no API.
 
 **State lives in `App.tsx`:**
-- `filter: SportFilter` ('all' | 'Run' | 'Ride') — set on `<div data-filter={filter}>`, which drives `--color-accent` via CSS
+- `filter: SportFilter` ('all' | 'Run' | 'Ride') — synced to `<html data-filter>` (documentElement), which drives `--color-accent` and the body gradient background via CSS
 - `year: number | null` — year filter for most components
 - `selectedActivity: Activity | null` — shared selection between heatmap, map, and activity log
 

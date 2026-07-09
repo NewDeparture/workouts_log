@@ -126,7 +126,6 @@ function WorkoutHeatmap({ workouts }: { workouts: Activity[] }) {
 
 export function WorkoutPage({ activities, onBack }: WorkoutPageProps) {
   const { locale } = useLocale()
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState<string>('all')
 
   const workouts = useMemo(
@@ -135,6 +134,7 @@ export function WorkoutPage({ activities, onBack }: WorkoutPageProps) {
   )
 
   const allYears = getAvailableYears(workouts)
+  const [selectedYear, setSelectedYear] = useState<number | null>(allYears[0] ?? null)
 
   const filtered = useMemo(() => {
     let list = workouts

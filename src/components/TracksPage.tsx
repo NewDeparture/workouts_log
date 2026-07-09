@@ -7,14 +7,16 @@ import type { Activity } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { BrandingBar } from './BrandingBar'
+import { categoryOf } from '../sportMeta'
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmVuLTI5IiwiYSI6ImNrZ3Q4Ym9mMDBqMGYyeXFvODV2dWl6YzQifQ.gSKoWF-fMjhzU67TuDezJQ'
 
-type SportType = 'Run' | 'Ride' | 'Hike'
+// 与首页一致的四类运动分类（全部/跑步/骑行/徒步/健身）
+type SportCat = 'run' | 'ride' | 'hike' | 'gym'
 
 interface TracksPageProps {
   activities: Activity[]
-  filter: string
+  dark: boolean
   onBack: () => void
   onSelectActivity?: (a: Activity | null) => void
 }
@@ -115,7 +117,15 @@ function TrackMap({ activity, activities, dark }: {
   // Init map once
   useEffect(() => {
     if (!mapContainer.current) return
-    if (map.current) { map.current.setStyle(style); return }
+    if (map.current) {
+      // 切换主题：setStyle 会清空自定义图层，待新样式加载完成后重绘路线
+      map.current.setStyle(style)
+      map.current.once('style.load', () => {
+        mapReady.current = true
+        updateRoutes.current()
+      })
+      return
+    }
     mapboxgl.accessToken = MAPBOX_TOKEN
     mapReady.current = false
     map.current = new mapboxgl.Map({ container: mapContainer.current, style, center: [108, 35], zoom: 3 })
@@ -142,31 +152,44 @@ function getColor(a: Activity): string {
   return '#a855f7'
 }
 
-export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageProps) {
+export function TracksPage({ activities, dark, onBack, onSelectActivity }: TracksPageProps) {
   const { locale } = useLocale()
   const allYears = getAvailableYears(activities)
+  // 断开首页关联：默认展示所有年份、所有运动类型的轨迹
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [sportFilter, setSportFilter] = useState<SportType | null>(null)
+  const [sportFilter, setSportFilter] = useState<SportCat | null>(null)
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'distance'>('date')
+
+  // 轨迹墙运动类型同步到 <html data-filter>，驱动渐变背景（离开时还原为进入前的运动类型）
+  useEffect(() => {
+    const html = document.documentElement
+    const prev = html.dataset.filter
+    html.dataset.filter = sportFilter === null ? 'all'
+      : sportFilter === 'run' ? 'Run'
+      : sportFilter === 'ride' ? 'Ride'
+      : sportFilter === 'hike' ? 'Hike'
+      : 'Gym'
+    return () => { html.dataset.filter = prev }
+  }, [sportFilter])
 
   // Export
   const captureRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
-  // Year pagination
-  const MAX_YEARS = 10
+  // Year pagination — 轨迹墙单独使用 13 个上限（与 Heatmap 的 10 个独立）
+  const MAX_YEARS = 13
   const [yearPage, setYearPage] = useState(0)
   const totalYearPages = Math.ceil(allYears.length / MAX_YEARS)
   const visibleYears = allYears.slice(yearPage * MAX_YEARS, yearPage * MAX_YEARS + MAX_YEARS)
 
-  // Determine which sport types exist
-  const hasSport = (t: SportType) => activities.some(a => a.type === t)
+  // Determine which sport categories exist
+  const hasSport = (c: SportCat) => activities.some(a => categoryOf(a.type) === c)
 
-  // Filtered base (year + sport)
+  // Filtered base (year + sport category)
   const base = activities.filter(a => {
     if (selectedYear !== null && new Date(a.start_date_local).getFullYear() !== selectedYear) return false
-    if (sportFilter !== null && a.type !== sportFilter) return false
+    if (sportFilter !== null && categoryOf(a.type) !== sportFilter) return false
     return true
   })
 
@@ -175,7 +198,7 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
   // Stats for left panel
   const totalDist = base.reduce((s, a) => s + a.distance, 0)
   const totalTime = base.reduce((s, a) => s + parseMovingTime(a.moving_time), 0)
-  const runs = base.filter(a => a.type === 'Run' && a.average_speed > 0)
+  const runs = base.filter(a => categoryOf(a.type) === 'run' && a.average_speed > 0)
   const avgPace = runs.length > 0 ? runs.reduce((s, a) => s + a.average_speed, 0) / runs.length : 0
 
   // Cluster tracks — defer heavy work
@@ -226,10 +249,11 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
     onSelectActivity?.(a)
   }
 
-  const allSportTabs: { label: string; value: SportType; color: string }[] = [
-    { label: locale === 'zh' ? '跑步' : 'Run', value: 'Run', color: '#f97316' },
-    { label: locale === 'zh' ? '骑行' : 'Ride', value: 'Ride', color: '#3b82f6' },
-    { label: locale === 'zh' ? '徒步' : 'Hike', value: 'Hike', color: '#22c55e' },
+  const allSportTabs: { label: string; value: SportCat; color: string }[] = [
+    { label: locale === 'zh' ? '跑步' : 'Run', value: 'run', color: '#f97316' },
+    { label: locale === 'zh' ? '骑行' : 'Ride', value: 'ride', color: '#3b82f6' },
+    { label: locale === 'zh' ? '徒步' : 'Hike', value: 'hike', color: '#22c55e' },
+    { label: locale === 'zh' ? '健身' : 'Gym', value: 'gym', color: '#a855f7' },
   ]
 
   return (
@@ -325,7 +349,7 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
 
           {/* Map */}
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden" style={{ height: 260 }}>
-            <TrackMap activity={selectedActivity} activities={withPolyline} dark />
+            <TrackMap activity={selectedActivity} activities={withPolyline} dark={dark} />
           </div>
         </div>
 
@@ -341,8 +365,8 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
               transition: none !important;
             }
           `}</style>
-          {/* Year pills + sport filter */}
-          <div className="flex items-center gap-1.5 mb-4 pb-3 border-b border-[var(--color-border)]">
+          {/* Filter row 1: Year pills + export */}
+          <div className="flex items-center gap-1.5 mb-3">
             {totalYearPages > 1 && (
               <button onClick={() => setYearPage(p => Math.max(0, p - 1))} disabled={yearPage === 0}
                 className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30 transition-colors px-1 text-base leading-none">
@@ -365,59 +389,61 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
                 ›
               </button>
             )}
-            {/* Sport filter — right side */}
-            <div className="flex items-center gap-1.5 ml-auto">
-              <button onClick={() => setSportFilter(null)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === null ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
-                {locale === 'zh' ? '全部' : 'All'}
+            <button
+              onClick={async () => {
+                if (!captureRef.current || exporting) return
+                setExporting(true)
+                try {
+                  const el = captureRef.current
+                  el.classList.add('exporting')
+                  const prevOverflow = el.style.overflow
+                  el.style.overflow = 'visible'
+                  await new Promise(resolve => requestAnimationFrame(resolve))
+                  const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true })
+                  el.classList.remove('exporting')
+                  el.style.overflow = prevOverflow
+                  const link = document.createElement('a')
+                  const label = selectedYear ?? 'all'
+                  link.download = `tracks-${label}.png`
+                  link.href = dataUrl
+                  link.click()
+                } catch (err) {
+                  console.error('Export failed:', err)
+                } finally {
+                  setExporting(false)
+                }
+              }}
+              disabled={exporting}
+              className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50 transition-all ml-auto"
+              title={locale === 'zh' ? '导出图片' : 'Export as image'}
+            >
+              {exporting ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              )}
+            </button>
+          </div>
+
+          {/* Filter row 2: Sport type filter */}
+          <div className="flex items-center gap-1.5 mb-4 pb-3 border-b border-[var(--color-border)]">
+            {/* 占位箭头：与年份行的 ‹ 等宽，保证「ALL」横向对齐 */}
+            {totalYearPages > 1 && <span className="px-1 text-base leading-none invisible">‹</span>}
+            <button onClick={() => setSportFilter(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === null ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
+              {locale === 'zh' ? '全部' : 'All'}
+            </button>
+            {allSportTabs.filter(t => hasSport(t.value)).map(({ label, value, color }) => (
+              <button key={value} onClick={() => setSportFilter(sportFilter === value ? null : value)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === value ? 'text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+                style={sportFilter === value ? { backgroundColor: color } : {}}>
+                {label}
               </button>
-              {allSportTabs.filter(t => hasSport(t.value)).map(({ label, value, color }) => (
-                <button key={value} onClick={() => setSportFilter(sportFilter === value ? null : value)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === value ? 'text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
-                  style={sportFilter === value ? { backgroundColor: color } : {}}>
-                  {label}
-                </button>
-              ))}
-              <span className="w-px h-3 bg-[var(--color-border)] mx-1" />
-              <button
-                onClick={async () => {
-                  if (!captureRef.current || exporting) return
-                  setExporting(true)
-                  try {
-                    const el = captureRef.current
-                    el.classList.add('exporting')
-                    const prevOverflow = el.style.overflow
-                    el.style.overflow = 'visible'
-                    await new Promise(resolve => requestAnimationFrame(resolve))
-                    const dataUrl = await toPng(el, { pixelRatio: 2, cacheBust: true })
-                    el.classList.remove('exporting')
-                    el.style.overflow = prevOverflow
-                    const link = document.createElement('a')
-                    const label = selectedYear ?? 'all'
-                    link.download = `tracks-${label}.png`
-                    link.href = dataUrl
-                    link.click()
-                  } catch (err) {
-                    console.error('Export failed:', err)
-                  } finally {
-                    setExporting(false)
-                  }
-                }}
-                disabled={exporting}
-                className="w-6 h-6 flex items-center justify-center rounded text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-50 transition-all"
-                title={locale === 'zh' ? '导出图片' : 'Export as image'}
-              >
-                {exporting ? (
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                )}
-              </button>
-            </div>
+            ))}
           </div>
 
           {clustering ? (
@@ -458,12 +484,12 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
           {/* Legend + sort */}
           {!clustering && clusteredTracks.length > 0 && (
             <div className="mt-4 pt-3 border-t border-[var(--color-border)] flex items-center gap-4 text-xs text-[var(--color-muted)] flex-wrap">
-              {sportFilter === null || sportFilter === 'Run' ? <>
+              {sportFilter === null || sportFilter === 'run' ? <>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#f97316] rounded" />{locale === 'zh' ? '跑步' : 'Run'}</span>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#ef4444] rounded" />{locale === 'zh' ? '跑步 >20km' : 'Run >20km'}</span>
               </> : null}
-              {(sportFilter === null || sportFilter === 'Ride') && hasSport('Ride') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#3b82f6] rounded" />{locale === 'zh' ? '骑行' : 'Ride'}</span>}
-              {(sportFilter === null || sportFilter === 'Hike') && hasSport('Hike') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#22c55e] rounded" />{locale === 'zh' ? '徒步' : 'Hike'}</span>}
+              {(sportFilter === null || sportFilter === 'ride') && hasSport('ride') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#3b82f6] rounded" />{locale === 'zh' ? '骑行' : 'Ride'}</span>}
+              {(sportFilter === null || sportFilter === 'hike') && hasSport('hike') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#22c55e] rounded" />{locale === 'zh' ? '徒步' : 'Hike'}</span>}
               <div className="ml-auto flex items-center gap-1">
                 <span>{clusteredTracks.length} {locale === 'zh' ? '条路线' : 'routes'}</span>
                 <span className="mx-1.5 text-[var(--color-border)]">·</span>

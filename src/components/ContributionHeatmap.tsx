@@ -10,8 +10,8 @@ const MAX_VISIBLE_YEARS = 10
 
 interface HeatmapProps {
   activities: Activity[]
-  year: number | null
-  setYear?: (y: number | null) => void
+  displayYear: number | 'all'
+  setDisplayYear?: (y: number | 'all') => void
   filter: SportFilter
   onSelectActivity?: (a: Activity | null) => void
 }
@@ -71,21 +71,23 @@ function dominantDisplayType(acts: Activity[]): 'Run' | 'Ride' | 'Hike' | 'Train
   return toDisplayType(sorted[0].type)
 }
 
-export function ContributionHeatmap({ activities, year, setYear, filter, onSelectActivity }: HeatmapProps) {
+export function ContributionHeatmap({ activities, displayYear, setDisplayYear, filter, onSelectActivity }: HeatmapProps) {
   const { t, locale } = useLocale()
-  const allYears = getAvailableYears(activities)
-  // 年份与 Activity Log 共享同一来源（App 的 year）：null = 全部，否则为具体年份
-  const selectedYear: number | 'all' = year === null ? 'all' : year
+  // 数据源已是「仅按运动类型过滤」的全量数据，故年份列表永远完整（不会因所选年份而塌缩）
+  // 用 useMemo 稳定引用：否则每次渲染都是新数组，会让下方同步 effect 每渲染都执行，
+  // 从而在点击左右箭头后把窗口位置立即重置回当前年份，导致箭头“无法滚动”。
+  const allYears = useMemo(() => getAvailableYears(activities), [activities])
+  const selectedYear: number | 'all' = displayYear
   // yearWindowEnd: index into allYears of the last visible year (0-based, most-recent-first)
   const [yearWindowEnd, setYearWindowEnd] = useState(Math.min(MAX_VISIBLE_YEARS - 1, allYears.length - 1))
 
-  // 当外部（如 Activity Log）切换年份时，让所选年份进入可见窗口并高亮
+  // 当展示年份变化（含外部 Activity Log 选中具体年份）时，让所选年份进入可见窗口并高亮
   useEffect(() => {
-    if (year === null) return
-    const idx = allYears.indexOf(year)
+    if (displayYear === 'all') return
+    const idx = allYears.indexOf(displayYear)
     if (idx < 0) return
     setYearWindowEnd(Math.min(Math.max(idx, MAX_VISIBLE_YEARS - 1), allYears.length - 1))
-  }, [year, allYears])
+  }, [displayYear, allYears])
   const captureRef = useRef<HTMLDivElement>(null)
   const [exporting, setExporting] = useState(false)
 
@@ -170,7 +172,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
       return allYears.map(yr => ({ year: yr, ...buildYearGrid(yr, activities) }))
     }
     return [{ year: selectedYear, ...buildYearGrid(selectedYear, activities) }]
-  }, [activities, year, filter])
+  }, [activities, displayYear, filter])
 
   const dayLabels = locale === 'zh' ? ['', '一', '', '三', '', '五', ''] : ['', 'M', '', 'W', '', 'F', '']
 
@@ -184,7 +186,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
         .map(a => toDisplayType(a.type))
     )
     return (['Run', 'Ride', 'Hike', 'Training'] as const).filter(t => types.has(t))
-  }, [activities, year, isAll])
+  }, [activities, displayYear, isAll])
 
   // Gym: monthly session breakdown
   const gymMonthlyData = useMemo(() => {
@@ -200,7 +202,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
       )
       return { month: m, total: gymActs.length, byType }
     })
-  }, [activities, year, isGym])
+  }, [activities, displayYear, isGym])
 
   const heatmapTitle = filter === 'Run'  ? (locale === 'zh' ? '跑步热力图' : 'Run Heatmap')
     : filter === 'Ride' ? (locale === 'zh' ? '骑行热力图' : 'Ride Heatmap')
@@ -209,7 +211,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
     : t('heatmapTitle')
 
   const handleSelectYear = (yr: number | 'all') => {
-    setYear?.(yr === 'all' ? null : yr)
+    setDisplayYear?.(yr)
   }
 
   // Visible year window
@@ -277,7 +279,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
       }
     }
     return { count, distance, time, typeStats }
-  }, [yearData, year])
+  }, [yearData, displayYear])
 
   return (
     <div ref={captureRef} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 overflow-x-auto">
@@ -307,9 +309,9 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
       `}</style>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">{heatmapTitle}</h2>
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <h2 className="text-lg font-semibold shrink-0">{heatmapTitle}</h2>
+        <div className="flex items-center gap-1.5 flex-wrap justify-end ml-4 min-w-0">
           {/* ALL button */}
           <button
             onClick={() => handleSelectYear('all')}

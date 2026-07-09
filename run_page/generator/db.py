@@ -1,6 +1,5 @@
 import datetime
-import random
-import string
+import time
 
 import geopy
 from config import TYPE_DICT
@@ -21,15 +20,52 @@ from sqlalchemy.orm import sessionmaker
 Base = declarative_base()
 
 
-# random user name 8 letters
-def randomword():
-    letters = string.ascii_lowercase
-    return "".join(random.choice(letters) for i in range(4))
+# 反向地理编码（经纬度 -> 地名）相关配置
+# User-Agent 需符合 Nominatim 使用政策：包含应用标识与联系方式
+NOMINATIM_USER_AGENT = "workouts-log/1.0 (https://github.com/jimerun/workouts_log)"
+# 两次请求之间的最小间隔（秒），遵守 Nominatim 约 1 req/s 的限制，避免被限流
+GEOCODE_MIN_INTERVAL = 1.1
+# 单次请求超时（秒）
+GEOCODE_TIMEOUT = 10
+# 失败最大重试次数
+GEOCODE_MAX_RETRIES = 3
+# 重试退避基数（秒）
+GEOCODE_RETRY_BACKOFF = 2.0
+
+geopy.geocoders.options.default_user_agent = NOMINATIM_USER_AGENT
+# reverse the location (lat, lon) -> location detail
+# rate_limit 关闭，由下方 _throttle_geocode 统一控制请求间隔
+g = Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=GEOCODE_TIMEOUT, rate_limit=False)
+
+_last_geocode_ts = 0.0
 
 
-geopy.geocoders.options.default_user_agent = "my-application"
-# reverse the location (lan, lon) -> location detail
-g = Nominatim(user_agent=randomword())
+def _throttle_geocode():
+    """确保两次地理编码请求之间至少间隔 GEOCODE_MIN_INTERVAL 秒。"""
+    global _last_geocode_ts
+    elapsed = time.monotonic() - _last_geocode_ts
+    if elapsed < GEOCODE_MIN_INTERVAL:
+        time.sleep(GEOCODE_MIN_INTERVAL - elapsed)
+    _last_geocode_ts = time.monotonic()
+
+
+def reverse_geocode(start_point):
+    """将 (lat, lon) 反向地理编码为地名字符串，带限流与重试。失败返回空串。"""
+    if not start_point:
+        return ""
+    lat, lon = start_point.lat, start_point.lon
+    last_err = None
+    for attempt in range(1, GEOCODE_MAX_RETRIES + 1):
+        try:
+            _throttle_geocode()
+            result = g.reverse(f"{lat}, {lon}", language="zh-CN")
+            return str(result) if result else ""
+        except Exception as e:
+            last_err = e
+            if attempt < GEOCODE_MAX_RETRIES:
+                time.sleep(GEOCODE_RETRY_BACKOFF * attempt)
+    print(f"[geocode] failed for {lat},{lon}: {last_err}")
+    return ""
 
 
 ACTIVITY_KEYS = [
@@ -61,6 +97,8 @@ class Activity(Base):
     start_date = Column(String)
     start_date_local = Column(String)
     location_country = Column(String)
+    start_lat = Column(Float)
+    start_lon = Column(Float)
     summary_polyline = Column(String)
     average_heartrate = Column(Float)
     average_speed = Column(Float)
@@ -97,24 +135,10 @@ def update_or_create_activity(session, run_activity):
             start_point = run_activity.start_latlng
             location_country = getattr(run_activity, "location_country", "")
             # or China for #176 to fix
-            if not location_country and start_point or location_country == "China":
-                try:
-                    location_country = str(
-                        g.reverse(
-                            f"{start_point.lat}, {start_point.lon}", language="zh-CN"
-                        )
-                    )
-                # limit (only for the first time)
-                except Exception:
-                    try:
-                        location_country = str(
-                            g.reverse(
-                                f"{start_point.lat}, {start_point.lon}",
-                                language="zh-CN",
-                            )
-                        )
-                    except Exception:
-                        pass
+            if (not location_country and start_point) or location_country == "China":
+                location_country = reverse_geocode(start_point)
+            start_lat = start_point.lat if start_point else None
+            start_lon = start_point.lon if start_point else None
 
             activity = Activity(
                 run_id=run_activity.id,
@@ -126,6 +150,8 @@ def update_or_create_activity(session, run_activity):
                 start_date=run_activity.start_date,
                 start_date_local=run_activity.start_date_local,
                 location_country=location_country,
+                start_lat=start_lat,
+                start_lon=start_lon,
                 average_heartrate=run_activity.average_heartrate,
                 average_speed=float(run_activity.average_speed),
                 elevation_gain=(
@@ -157,11 +183,62 @@ def update_or_create_activity(session, run_activity):
                 run_activity.map and run_activity.map.summary_polyline or ""
             )
             activity.source = source
+            # 即使本次不重新解析位置，也刷新起点经纬度，
+            # 以便后续 backfill_location_country 能据此补全缺失的位置
+            start_point = run_activity.start_latlng
+            if start_point is not None:
+                activity.start_lat = start_point.lat
+                activity.start_lon = start_point.lon
     except Exception as e:
         print(f"something wrong with {run_activity.id}")
         print(str(e))
 
     return created
+
+
+def backfill_location_country(session):
+    """对库中已经存在但 location_country 为空、且有起点的记录补跑反向地理编码。
+
+    在每次导入新文件后调用（见 generator.sync_from_data_dir），用于补全之前因为
+    Nominatim 限流 / 超时 / 无网络而解析失败的记录。无坐标（如室内活动）的记录会被跳过。
+    """
+    rows = (
+        session.query(Activity)
+        .filter(
+            (
+                Activity.location_country.is_(None)
+                | (Activity.location_country == "")
+            )
+            & Activity.start_lat.isnot(None)
+            & Activity.start_lon.isnot(None)
+        )
+        .all()
+    )
+    if not rows:
+        print("[geocode] no missing location_country to backfill.")
+        return 0
+
+    print(
+        f"[geocode] backfilling {len(rows)} activities with missing location_country ..."
+    )
+
+    class _Point:
+        def __init__(self, lat, lon):
+            self.lat = lat
+            self.lon = lon
+
+    updated = 0
+    for idx, a in enumerate(rows, 1):
+        loc = reverse_geocode(_Point(a.start_lat, a.start_lon))
+        if loc:
+            a.location_country = loc
+            updated += 1
+        if idx % 20 == 0:
+            session.commit()
+            print(f"[geocode] backfilled {idx}/{len(rows)} ...")
+    session.commit()
+    print(f"[geocode] backfill done: {updated}/{len(rows)} updated.")
+    return updated
 
 
 def add_missing_columns(engine, model):

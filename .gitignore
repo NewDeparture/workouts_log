@@ -5,6 +5,12 @@
 node_modules
 yarn-error.log
 
+# Local dev/install logs
+dev.log
+dev.err
+install.log
+install.err
+
 # Build directory
 /build
 /dist

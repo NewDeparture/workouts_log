@@ -151,7 +151,13 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
   ]
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-bg)]/70 backdrop-blur-md">
+    <header
+      className="sticky top-0 z-50 backdrop-blur-md"
+      style={{
+        backgroundColor: 'color-mix(in srgb, var(--color-bg) 50%, transparent)',
+        backgroundImage: 'linear-gradient(to right, color-mix(in srgb, var(--color-accent) 20%, transparent), color-mix(in srgb, var(--color-accent) 9%, transparent))',
+      }}
+    >
       <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2">

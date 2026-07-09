@@ -90,6 +90,15 @@ export function formatPace(speedMs: number): string {
   return `${min}'${sec.toString().padStart(2, '0')}"`
 }
 
+// 游泳配速：以每 100 米计，同样拆成「分'秒"」显示（如 2'00"/100m = 每 100m 2 分钟）
+export function formatSwimPace(speedMs: number): string {
+  if (!speedMs) return '--'
+  const paceMin = 100 / 60 / speedMs
+  const min = Math.floor(paceMin)
+  const sec = Math.round((paceMin - min) * 60)
+  return `${min}'${sec.toString().padStart(2, '0')}"/100m`
+}
+
 export function formatDuration(timeStr: string): string {
   const secs = parseMovingTime(timeStr)
   const h = Math.floor(secs / 3600)

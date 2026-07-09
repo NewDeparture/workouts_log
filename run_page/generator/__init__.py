@@ -10,7 +10,12 @@ from sqlalchemy import func
 
 from polyline_processor import filter_out
 
-from .db import Activity, init_db, update_or_create_activity
+from .db import (
+    Activity,
+    init_db,
+    update_or_create_activity,
+    backfill_location_country,
+)
 
 from synced_data_file_logger import save_synced_data_file_list
 
@@ -132,24 +137,24 @@ class Generator:
             data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
         )
         print(f"load {len(tracks)} tracks")
-        if not tracks:
-            print("No tracks found.")
-            return
+        if tracks:
+            synced_files = []
 
-        synced_files = []
+            for t in tracks:
+                created = update_or_create_activity(self.session, t.to_namedtuple())
+                if created:
+                    sys.stdout.write("+")
+                else:
+                    sys.stdout.write(".")
+                synced_files.extend(t.file_names)
+                sys.stdout.flush()
 
-        for t in tracks:
-            created = update_or_create_activity(self.session, t.to_namedtuple())
-            if created:
-                sys.stdout.write("+")
-            else:
-                sys.stdout.write(".")
-            synced_files.extend(t.file_names)
-            sys.stdout.flush()
+            save_synced_data_file_list(synced_files)
 
-        save_synced_data_file_list(synced_files)
+            self.session.commit()
 
-        self.session.commit()
+        # 无论本次是否导入了新文件，都检查并补全之前解析失败的位置
+        backfill_location_country(self.session)
 
     def sync_from_kml_track(self, track):
         created = update_or_create_activity(self.session, track.to_namedtuple())
