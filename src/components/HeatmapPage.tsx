@@ -368,7 +368,7 @@ export function HeatmapPage({ activities, filter, onSelectActivity, onBack }: He
         })}
       </div>
 
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6 flex justify-start">
         <BrandingBar />
       </div>
     </div>

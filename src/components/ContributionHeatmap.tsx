@@ -24,23 +24,31 @@ function toDisplayType(type: string): 'Run' | 'Ride' | 'Hike' | 'Training' {
   return 'Training'
 }
 
+// 注：Training 组即 gym/其他类型的归并组，统一使用紫色系，
+// 与 CATEGORY_COLOR.gym(#a855f7) 及单 Gym 筛选保持一致。
 const TYPE_PALETTES: Record<string, string[]> = {
   Run:      ['#fed7aa', '#fb923c', '#f97316', '#ea580c'],
   Ride:     ['#bfdbfe', '#60a5fa', '#3b82f6', '#2563eb'],
   Hike:     ['#bbf7d0', '#4ade80', '#22c55e', '#16a34a'],
-  Training: ['#fce7f3', '#f9a8d4', '#ec4899', '#db2777'],
+  Training: ['#e9d5ff', '#c084fc', '#a855f7', '#7c3aed'],
+}
+
+// 用 sqrt 缩放把比值映射到 1..4 档：相比线性，能把被离群峰值压在最浅档的
+// 日常数据重新铺开，显著提升对比度，同时对次数(小整数)也稳健、单调。
+function ratioToLevel(ratio: number): number {
+  return Math.ceil(Math.min(Math.sqrt(ratio), 1) * 4)
 }
 
 // Color for single-filter modes (intensity by global max)
 function getColor(distance: number, max: number, filter: SportFilter): string {
   if (distance === 0) return 'var(--color-border)'
-  const level = Math.ceil(Math.min(distance / max, 1) * 4)
+  const level = ratioToLevel(distance / max)
   const colors: Record<string, string[]> = {
-    all:  ['#e9d5ff', '#c084fc', '#a855f7', '#7c3aed'],
+    all:  TYPE_PALETTES.Training,
     Run:  TYPE_PALETTES.Run,
     Ride: TYPE_PALETTES.Ride,
     Hike: TYPE_PALETTES.Hike,
-    Gym:  ['#f5d0fe', '#d946ef', '#c026d3', '#a21caf'],
+    Gym:  TYPE_PALETTES.Training,
   }
   const palette = colors[filter] ?? colors.all
   return palette[level - 1] ?? palette[0]
@@ -49,7 +57,7 @@ function getColor(distance: number, max: number, filter: SportFilter): string {
 // Color for "all" mode: ratio is per-type (dayDist / typeMax)
 function getColorAll(typeRatio: number, displayType: string): string {
   if (typeRatio === 0) return 'var(--color-border)'
-  const level = Math.ceil(Math.min(typeRatio, 1) * 4)
+  const level = ratioToLevel(typeRatio)
   const palette = TYPE_PALETTES[displayType] ?? TYPE_PALETTES.Training
   return palette[level - 1] ?? palette[0]
 }
@@ -462,8 +470,12 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
         ) : (
           <>
             <span className="text-xs text-[var(--color-muted)]">{t('less')}</span>
-            {[0.1, 0.35, 0.6, 0.82, 1].map((ratio, i) => (
-              <div key={i} className="w-3 h-3 rounded-sm" style={{ backgroundColor: getColor(ratio * (yearData[0]?.max || 1), yearData[0]?.max || 1, filter) }} />
+            {(filter === 'Run' ? TYPE_PALETTES.Run
+              : filter === 'Ride' ? TYPE_PALETTES.Ride
+              : filter === 'Hike' ? TYPE_PALETTES.Hike
+              : TYPE_PALETTES.Training
+            ).map((c, i) => (
+              <div key={i} className="w-3 h-3 rounded-sm" style={{ backgroundColor: c }} />
             ))}
             <span className="text-xs text-[var(--color-muted)]">{t('more')}</span>
           </>
@@ -488,7 +500,7 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
                   </span>
                 ))}
             </div>
-            <div className="flex items-end justify-end gap-4 text-sm text-[var(--color-muted)] -mt-1">
+            <div className="flex items-end justify-end gap-4 text-sm text-[var(--color-muted)] mt-3">
               <div className="mr-auto"><BrandingBar /></div>
               <span className="font-mono flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -524,8 +536,8 @@ export function ContributionHeatmap({ activities, year, setYear, filter, onSelec
                 ))}
             </div>
           )}
-          <div className="flex items-end justify-end gap-4 text-sm text-[var(--color-muted)] -mt-1">
-            <BrandingBar />
+          <div className="flex items-end justify-end gap-4 text-sm text-[var(--color-muted)] mt-3">
+            <div className="mr-auto"><BrandingBar /></div>
             <span className="font-mono flex items-center gap-1">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
               {yearData[0].stats.count} {locale === 'zh' ? '次' : 'sessions'}

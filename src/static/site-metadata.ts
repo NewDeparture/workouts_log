@@ -17,8 +17,8 @@ const getBasePath = () => {
 
 const data: ISiteMetadataResult = {
   siteTitle: 'Workouts Map',
-  siteUrl: 'https://zhaohongxuan.github.io',
-  logo: 'https://avatars.githubusercontent.com/u/8613196?v=4',
+  siteUrl: 'https://github.com/NewDeparture/NewDeparture',
+  logo: 'https://pic1.imgdb.cn/item/6a46521c0e2237bfad5c572a.jpg',
   description: 'Personal site and blog',
   keywords: 'workouts, running, cycling, riding, roadtrip, hiking, swimming',
   navLinks: [

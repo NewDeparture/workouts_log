@@ -453,7 +453,7 @@ export function TracksPage({ activities, onBack, onSelectActivity }: TracksPageP
           )}
 
           {/* Branding bar (export only) */}
-          <BrandingBar />
+          <div className="mt-6"><BrandingBar /></div>
 
           {/* Legend + sort */}
           {!clustering && clusteredTracks.length > 0 && (
