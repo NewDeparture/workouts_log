@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import type { CSSProperties } from 'react'
 import type { Activity, SportFilter } from '../types'
 import { formatPace, formatSwimPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
@@ -62,7 +63,7 @@ function activityName(a: Activity, locale: 'zh' | 'en'): string {
 }
 
 // 运动类型胶囊：文字超出时，在胶囊内部左右循环滚动（marquee），始终固定宽度；未超出则静态显示
-function TypePill({ type, locale }: { type: Activity['type']; locale: string }) {
+function TypePill({ type, locale }: { type: Activity['type']; locale: 'zh' | 'en' }) {
   const windowRef = useRef<HTMLSpanElement>(null)
   const [overflow, setOverflow] = useState(0)
   const label = typeLabel(type, locale)
@@ -84,11 +85,11 @@ function TypePill({ type, locale }: { type: Activity['type']; locale: string }) 
           className={`inline-block whitespace-nowrap${scrolling ? ' type-marquee-content' : ''}`}
           style={
             scrolling
-              ? {
+              ? ({
                   '--marquee-distance': `-${overflow}px`,
                   '--marquee-duration': `${duration}s`,
                   willChange: 'transform',
-                }
+                } as CSSProperties)
               : undefined
           }
         >

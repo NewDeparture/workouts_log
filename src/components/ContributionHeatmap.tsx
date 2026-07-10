@@ -4,7 +4,7 @@ import type { Activity, SportFilter } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { BrandingBar } from './BrandingBar'
-import { typeIcon, typeLabel, typeColor } from '../sportMeta'
+import { typeIcon, typeLabel } from '../sportMeta'
 
 const MAX_VISIBLE_YEARS = 10
 
