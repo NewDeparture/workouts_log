@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo, memo } from 'react'
 import { toPng } from 'html-to-image'
 import * as polyline from '@mapbox/polyline'
 import mapboxgl from 'mapbox-gl'
@@ -42,11 +42,14 @@ function renderTrackSVG(summaryPolyline: string, size = 80): string {
   } catch { return '' }
 }
 
-function TrackThumb({ activity, color, selected, onClick }: {
+const TrackThumb = memo(function TrackThumb({ activity, color, selected, onClick }: {
   activity: Activity; color: string; selected: boolean; onClick: () => void
 }) {
   const size = 80
-  const points = activity.summary_polyline ? renderTrackSVG(activity.summary_polyline, size) : ''
+  const points = useMemo(
+    () => (activity.summary_polyline ? renderTrackSVG(activity.summary_polyline, size) : ''),
+    [activity.summary_polyline, size]
+  )
   if (!points) return null
   return (
     <div
@@ -61,7 +64,7 @@ function TrackThumb({ activity, color, selected, onClick }: {
       </svg>
     </div>
   )
-}
+})
 
 function TrackMap({ activity, activities, dark }: {
   activity: Activity | null; activities: Activity[]; dark?: boolean
@@ -155,23 +158,23 @@ function getColor(a: Activity): string {
 export function TracksPage({ activities, dark, onBack, onSelectActivity }: TracksPageProps) {
   const { locale } = useLocale()
   const allYears = getAvailableYears(activities)
-  // 断开首页关联：默认展示所有年份、所有运动类型的轨迹
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  // 默认只展示最新年份的轨迹，减少首屏加载量；用户可手动切回「全部」
+  // getAvailableYears 返回降序数组，最新年份在 allYears[0]
+  const [selectedYear, setSelectedYear] = useState<number | null>(() =>
+    allYears.length ? allYears[0] : null
+  )
   const [sportFilter, setSportFilter] = useState<SportCat | null>(null)
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'distance'>('date')
 
-  // 轨迹墙运动类型同步到 <html data-filter>，驱动渐变背景（离开时还原为进入前的运动类型）
+  // 轨迹墙拥有专属青色主题：始终将 <html data-filter> 锁定为 'tracks'，
+  // 使 --color-accent（含按钮色块与网页渐变背景）恒为青色，不随运动类型切换而改变。
   useEffect(() => {
     const html = document.documentElement
     const prev = html.dataset.filter
-    html.dataset.filter = sportFilter === null ? 'all'
-      : sportFilter === 'run' ? 'Run'
-      : sportFilter === 'ride' ? 'Ride'
-      : sportFilter === 'hike' ? 'Hike'
-      : 'Gym'
+    html.dataset.filter = 'tracks'
     return () => { html.dataset.filter = prev }
-  }, [sportFilter])
+  }, [])
 
   // Export
   const captureRef = useRef<HTMLDivElement>(null)
@@ -187,13 +190,13 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
   const hasSport = (c: SportCat) => activities.some(a => categoryOf(a.type) === c)
 
   // Filtered base (year + sport category)
-  const base = activities.filter(a => {
+  const base = useMemo(() => activities.filter(a => {
     if (selectedYear !== null && new Date(a.start_date_local).getFullYear() !== selectedYear) return false
     if (sportFilter !== null && categoryOf(a.type) !== sportFilter) return false
     return true
-  })
+  }), [activities, selectedYear, sportFilter])
 
-  const withPolyline = base.filter(a => a.summary_polyline && a.summary_polyline.length > 20)
+  const withPolyline = useMemo(() => base.filter(a => a.summary_polyline && a.summary_polyline.length > 20), [base])
 
   // Stats for left panel
   const totalDist = base.reduce((s, a) => s + a.distance, 0)
@@ -206,7 +209,18 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
   const [clusteredTracks, setClusteredTracks] = useState<Cluster[]>([])
   const [clustering, setClustering] = useState(true)
 
+  // 首屏就绪门控：进入页面时先渲染轻量占位，待浏览器绘制完当前帧
+  // （此时高亮指示器动画已经开始播放）后再执行重型计算，避免阻塞切换瞬间的过渡。
+  const [ready, setReady] = useState(false)
   useEffect(() => {
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => setReady(true))
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
     setClustering(true)
     const id = setTimeout(() => {
       const acts = [...withPolyline].sort((a, b) =>
@@ -242,7 +256,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
       setClustering(false)
     }, 0)
     return () => clearTimeout(id)
-  }, [withPolyline.length, selectedYear, sportFilter])
+  }, [ready, withPolyline.length, selectedYear, sportFilter])
 
   const handleSelectTrack = (a: Activity) => {
     setSelectedActivity(prev => prev?.run_id === a.run_id ? null : a)
@@ -349,7 +363,9 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
 
           {/* Map */}
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden" style={{ height: 260 }}>
-            <TrackMap activity={selectedActivity} activities={withPolyline} dark={dark} />
+            {ready
+              ? <TrackMap activity={selectedActivity} activities={withPolyline} dark={dark} />
+              : <div className="w-full h-full" />}
           </div>
         </div>
 
@@ -374,12 +390,12 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
               </button>
             )}
             <button onClick={() => setSelectedYear(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedYear === null ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
+              className={`px-3 py-1 rounded-full text-xs font-medium uppercase transition-all border ${selectedYear === null ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
               {locale === 'zh' ? '全部' : 'All'}
             </button>
             {visibleYears.map(yr => (
               <button key={yr} onClick={() => setSelectedYear(selectedYear === yr ? null : yr)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedYear === yr ? 'bg-[var(--color-accent)] text-white' : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${selectedYear === yr ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
                 {yr}
               </button>
             ))}
@@ -434,13 +450,12 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
             {/* 占位箭头：与年份行的 ‹ 等宽，保证「ALL」横向对齐 */}
             {totalYearPages > 1 && <span className="px-1 text-base leading-none invisible">‹</span>}
             <button onClick={() => setSportFilter(null)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === null ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
+              className={`px-3 py-1 rounded-full text-xs font-medium uppercase transition-all border ${sportFilter === null ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
               {locale === 'zh' ? '全部' : 'All'}
             </button>
-            {allSportTabs.filter(t => hasSport(t.value)).map(({ label, value, color }) => (
+            {allSportTabs.filter(t => hasSport(t.value)).map(({ label, value }) => (
               <button key={value} onClick={() => setSportFilter(sportFilter === value ? null : value)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === value ? 'text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
-                style={sportFilter === value ? { backgroundColor: color } : {}}>
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all border ${sportFilter === value ? 'bg-[var(--color-accent)] text-white border-transparent' : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}>
                 {label}
               </button>
             ))}

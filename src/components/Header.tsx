@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useLayoutEffect } from 'react'
 import { LogOut } from 'lucide-react'
 import type { SportFilter, Activity } from '../types'
 import { isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
@@ -123,6 +123,13 @@ function GitHubAuthDropdown() {
 export function Header({ filter, setFilter, dark, toggleTheme, activities, page, onNavigate }: HeaderProps) {
   const { locale, setLocale, t } = useLocale()
 
+  const [tabHover, setTabHover] = useState<number | null>(null)
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [navHover, setNavHover] = useState<number | null>(null)
+  const navRefs = useRef<(HTMLSpanElement | null)[]>([])
+  const [tabActiveRect, setTabActiveRect] = useState<{ left: number; width: number; top: number; height: number } | null>(null)
+  const [navActiveRect, setNavActiveRect] = useState<{ left: number; width: number; top: number; height: number } | null>(null)
+
   const hasRun = activities.some((a) => isRunType(a.type))
   const hasRide = activities.some((a) => isRideType(a.type))
   const hasHike = activities.some((a) => isHikeType(a.type))
@@ -150,6 +157,38 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
     { label: t('checkin'), page: 'checkin' },
   ]
 
+  const activeTabIndex = page === 'home' ? tabs.findIndex((tab) => tab.value === filter) : -1
+
+  useLayoutEffect(() => {
+    function updateActiveRect() {
+      const el = activeTabIndex >= 0 ? tabRefs.current[activeTabIndex] : null
+      if (el) {
+        setTabActiveRect({ left: el.offsetLeft, width: el.offsetWidth, top: el.offsetTop, height: el.offsetHeight })
+      } else {
+        setTabActiveRect(null)
+      }
+    }
+    updateActiveRect()
+    window.addEventListener('resize', updateActiveRect)
+    return () => window.removeEventListener('resize', updateActiveRect)
+  }, [activeTabIndex, filter, page, locale, tabs.length])
+
+  const activeNavIndex = navItems.findIndex((item) => item.page === page)
+
+  useLayoutEffect(() => {
+    function updateActiveRect() {
+      const el = activeNavIndex >= 0 ? navRefs.current[activeNavIndex] : null
+      if (el) {
+        setNavActiveRect({ left: el.offsetLeft, width: el.offsetWidth, top: el.offsetTop, height: el.offsetHeight })
+      } else {
+        setNavActiveRect(null)
+      }
+    }
+    updateActiveRect()
+    window.addEventListener('resize', updateActiveRect)
+    return () => window.removeEventListener('resize', updateActiveRect)
+  }, [activeNavIndex, page, locale, tabs.length])
+
   return (
     <header
       className="sticky top-0 z-50 backdrop-blur-md"
@@ -161,36 +200,81 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
       <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2">
-          <span className="text-xl font-bold text-[var(--color-text)]">
-            WORKOUT<span className="text-[var(--color-run)]">.</span>LOG
+          <span className="text-2xl font-bold text-[var(--color-text)]">
+            WORKOUT<span className="text-[#ef4444]">.</span><span className="text-[#ef4444]">LOG</span>
           </span>
         </div>
 
         {/* Sport filter tabs */}
-        <div className="flex items-center gap-1">
-          {tabs.map((tab) => (
+        <div className="flex items-center gap-1 relative">
+          {tabActiveRect && (
+            <span
+              aria-hidden
+              className="absolute z-0 rounded-full pointer-events-none bg-[var(--color-accent)]"
+              style={{
+                transform: `translate3d(${tabActiveRect.left}px, ${tabActiveRect.top}px, 0)`,
+                width: tabActiveRect.width,
+                height: tabActiveRect.height,
+                transition: 'transform 300ms ease-out, width 300ms ease-out, height 300ms ease-out',
+                willChange: 'transform',
+              }}
+            />
+          )}
+          {tabs.map((tab, i) => (
             <button
               key={tab.value}
-              onClick={() => { setFilter(tab.value); if (page === 'checkin') onNavigate('home') }}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+              ref={(el) => { tabRefs.current[i] = el }}
+              onMouseEnter={() => setTabHover(i)}
+              onMouseLeave={() => setTabHover(null)}
+              onClick={() => { setFilter(tab.value); if (page !== 'home') onNavigate('home') }}
+              className={`relative z-10 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 filter === tab.value && page === 'home'
-                  ? 'bg-[var(--color-accent)] text-white'
+                  ? 'text-white'
                   : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
               }`}
             >
               {tab.label}
             </button>
           ))}
+          {tabHover !== null && tabRefs.current[tabHover] && !(filter === tabs[tabHover].value && page === 'home') && (
+            <span
+              aria-hidden
+              className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-border)_45%,transparent)]"
+              style={{
+                transform: `translate3d(${tabRefs.current[tabHover]!.offsetLeft}px, ${tabRefs.current[tabHover]!.offsetTop}px, 0)`,
+                width: tabRefs.current[tabHover]!.offsetWidth,
+                height: tabRefs.current[tabHover]!.offsetHeight,
+                transition: 'transform 200ms ease-out, width 200ms ease-out, height 200ms ease-out',
+                willChange: 'transform',
+              }}
+            />
+          )}
         </div>
 
         {/* Right nav */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 relative">
           {/* Page nav */}
-          {navItems.map((item) => (
+          {navActiveRect && (
+            <span
+              aria-hidden
+              className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)]"
+              style={{
+                transform: `translate3d(${navActiveRect.left}px, ${navActiveRect.top}px, 0)`,
+                width: navActiveRect.width,
+                height: navActiveRect.height,
+                transition: 'transform 300ms ease-out, width 300ms ease-out, height 300ms ease-out',
+                willChange: 'transform',
+              }}
+            />
+          )}
+          {navItems.map((item, i) => (
             <span
               key={item.label}
+              ref={(el) => { navRefs.current[i] = el }}
+              onMouseEnter={() => setNavHover(i)}
+              onMouseLeave={() => setNavHover(null)}
               onClick={() => onNavigate(item.page)}
-              className={`text-sm cursor-pointer transition-colors ${
+              className={`relative z-10 text-sm cursor-pointer px-3 py-1 rounded-full transition-colors ${
                 item.page === page
                   ? 'text-[var(--color-accent)] font-medium'
                   : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
@@ -199,6 +283,19 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
               {item.label}
             </span>
           ))}
+          {navHover !== null && navRefs.current[navHover] && navItems[navHover].page !== page && (
+            <span
+              aria-hidden
+              className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-border)_45%,transparent)]"
+              style={{
+                transform: `translate3d(${navRefs.current[navHover]!.offsetLeft}px, ${navRefs.current[navHover]!.offsetTop}px, 0)`,
+                width: navRefs.current[navHover]!.offsetWidth,
+                height: navRefs.current[navHover]!.offsetHeight,
+                transition: 'transform 200ms ease-out, width 200ms ease-out, height 200ms ease-out',
+                willChange: 'transform',
+              }}
+            />
+          )}
 
           {/* Theme toggle */}
           <button

@@ -40,9 +40,10 @@ export default function App() {
   const sportFiltered = useFilteredActivities(activities, filter, null)
 
   // 将当前运动类型写到 <html data-filter>，驱动 body 渐变背景与全局 --color-accent
+  // 首页跟随所选运动类型；Tracks / Habits 页面使用各自固定的专属主题色
   useEffect(() => {
-    document.documentElement.dataset.filter = filter
-  }, [filter])
+    document.documentElement.dataset.filter = page === 'home' ? filter : page
+  }, [filter, page])
 
   // 联动规则：
   // 1) Activity Log 选中具体年份 -> Heatmap 跟随；选中 ALL -> Heatmap 保持不变（不响应 ALL）

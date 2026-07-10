@@ -4,7 +4,7 @@ import type { Activity, SportFilter } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { BrandingBar } from './BrandingBar'
-import { typeIcon, typeLabel, typeColor, isGymType } from '../sportMeta'
+import { typeIcon, typeLabel, typeColor } from '../sportMeta'
 
 const MAX_VISIBLE_YEARS = 10
 
@@ -99,8 +99,9 @@ export function ContributionHeatmap({ activities, displayYear, setDisplayYear, f
 
     const totalDist = yearActivities.reduce((s, a) => s + a.distance, 0)
     const totalTime = yearActivities.reduce((s, a) => s + parseMovingTime(a.moving_time), 0)
-    const runs = yearActivities.filter((a) => a.type === 'Run')
-    const avgPace = runs.length > 0 ? runs.reduce((s, a) => s + a.average_speed, 0) / runs.length : 0
+    const paceDisplayType = filter === 'Ride' ? 'Ride' : filter === 'Hike' ? 'Hike' : filter === 'Run' ? 'Run' : null
+    const paceActs = paceDisplayType ? yearActivities.filter((a) => toDisplayType(a.type) === paceDisplayType) : []
+    const avgPace = paceActs.length > 0 ? paceActs.reduce((s, a) => s + a.average_speed, 0) / paceActs.length : 0
 
     // Per-type stats
     const typeStats: Record<string, { distance: number; count: number }> = {}
@@ -187,22 +188,6 @@ export function ContributionHeatmap({ activities, displayYear, setDisplayYear, f
     )
     return (['Run', 'Ride', 'Hike', 'Training'] as const).filter(t => types.has(t))
   }, [activities, displayYear, isAll])
-
-  // Gym: monthly session breakdown
-  const gymMonthlyData = useMemo(() => {
-    if (!isGym || selectedYear === 'all') return []
-    return Array.from({ length: 12 }, (_, m) => {
-      const monthActs = activities.filter(a => {
-        const d = new Date(a.start_date_local)
-        return d.getFullYear() === selectedYear && d.getMonth() === m
-      })
-      const gymActs = monthActs.filter(a => isGymType(a.type))
-      const byType = Object.fromEntries(
-        [...new Set(gymActs.map(a => a.type))].map(t => [t, gymActs.filter(a => a.type === t).length])
-      )
-      return { month: m, total: gymActs.length, byType }
-    })
-  }, [activities, displayYear, isGym])
 
   const heatmapTitle = filter === 'Run'  ? (locale === 'zh' ? '跑步热力图' : 'Run Heatmap')
     : filter === 'Ride' ? (locale === 'zh' ? '骑行热力图' : 'Ride Heatmap')
@@ -488,7 +473,7 @@ export function ContributionHeatmap({ activities, displayYear, setDisplayYear, f
       {selectedYear === 'all' ? (
         allStats && (
           <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-            <div className="flex items-center justify-end gap-2 text-xs text-[var(--color-muted)] flex-wrap">
+            <div className="flex items-center justify-end gap-2 text-xs text-[var(--color-muted)] flex-wrap min-h-[1rem]">
               <span className="text-xs text-[var(--color-muted)] mr-auto">{locale === 'zh' ? '全部年份汇总' : 'All-time total'}</span>
               {Object.entries(allStats.typeStats)
                 .filter(([type, v]) => v.count > 0 && ['Run', 'Ride', 'Hike'].includes(type))
@@ -523,21 +508,19 @@ export function ContributionHeatmap({ activities, displayYear, setDisplayYear, f
         )
       ) : yearData[0] && (
         <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-          {isAll && (
-            <div className="flex items-center justify-end gap-2 text-xs text-[var(--color-muted)] flex-wrap">
-              {Object.entries(yearData[0].stats.typeStats)
-                .filter(([type, v]) => v.count > 0 && ['Run', 'Ride', 'Hike'].includes(type))
-                .sort(([a], [b]) => {
-                  const order = ['Run', 'Ride', 'Hike']
-                  return order.indexOf(a) - order.indexOf(b)
-                })
-                .map(([type, v]) => (
-                  <span key={type} className="whitespace-nowrap">
-                    {typeIcon(type)} {(v.distance / 1000).toFixed(1)} km
-                  </span>
-                ))}
-            </div>
-          )}
+          <div className="flex items-center justify-end gap-2 text-xs text-[var(--color-muted)] flex-wrap min-h-[1rem]">
+            {Object.entries(yearData[0].stats.typeStats)
+              .filter(([type, v]) => v.count > 0 && ['Run', 'Ride', 'Hike'].includes(type))
+              .sort(([a], [b]) => {
+                const order = ['Run', 'Ride', 'Hike']
+                return order.indexOf(a) - order.indexOf(b)
+              })
+              .map(([type, v]) => (
+                <span key={type} className="whitespace-nowrap">
+                  {typeIcon(type)} {(v.distance / 1000).toFixed(1)} km
+                </span>
+              ))}
+          </div>
           <div className="flex items-end justify-end gap-4 text-sm text-[var(--color-muted)] mt-3">
             <div className="mr-auto"><BrandingBar /></div>
             <span className="font-mono flex items-center gap-1">
@@ -554,53 +537,17 @@ export function ContributionHeatmap({ activities, displayYear, setDisplayYear, f
                 {formatDistance(yearData[0].stats.distance)} km
               </span>
             )}
-            {filter === 'Run' && yearData[0].stats.pace > 0 && (
+            {['Run', 'Ride', 'Hike'].includes(filter) && yearData[0].stats.pace > 0 && (
               <span className="font-mono flex items-center gap-1">
                 <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
-                {formatPace(yearData[0].stats.pace)}
+                {filter === 'Run'
+                  ? formatPace(yearData[0].stats.pace)
+                  : (() => {
+                      const kmh = yearData[0].stats.pace * 3.6
+                      return `${kmh >= 10 ? kmh.toFixed(1) : kmh.toFixed(2)} km/h`
+                    })()}
               </span>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* Gym: monthly frequency bars */}
-      {isGym && gymMonthlyData.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-muted)] mb-3">{locale === 'zh' ? '月度频次' : 'Monthly Frequency'}</p>
-          <div className="flex items-end gap-1.5" style={{ height: '64px' }}>
-            {gymMonthlyData.map((m) => {
-              const maxMonthTotal = Math.max(...gymMonthlyData.map(x => x.total), 1)
-              const barH = m.total > 0 ? Math.max(Math.round((m.total / maxMonthTotal) * 52), 6) : 0
-              return (
-                <div key={m.month} className="flex-1 flex flex-col items-center gap-1 group">
-                  <div className="w-full flex items-end justify-center" style={{ height: '52px' }}>
-                    {m.total > 0 && (
-                      <div className="w-full rounded-t-sm relative overflow-hidden" style={{ height: `${barH}px` }}>
-                        {Object.keys(m.byType).filter(t => m.byType[t] > 0).map((t) => {
-                          const segPct = (m.byType[t] / m.total) * 100
-                          return <div key={t} className="w-full" style={{ height: `${segPct}%`, backgroundColor: typeColor(t) }} />
-                        })}
-                        <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[8px] text-[var(--color-accent)] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          {m.total}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[9px] text-[var(--color-muted)]">
-                    {['J','F','M','A','M','J','J','A','S','O','N','D'][m.month]}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          <div className="flex items-center gap-4 mt-2 flex-wrap">
-            {Array.from(new Set(activities.filter(a => isGymType(a.type)).map(a => a.type))).map(t => (
-              <span key={t} className="flex items-center gap-1 text-[10px] text-[var(--color-muted)]">
-                <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: typeColor(t) }} />
-                {typeLabel(t, locale)}
-              </span>
-            ))}
           </div>
         </div>
       )}

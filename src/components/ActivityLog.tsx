@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Activity, SportFilter } from '../types'
-import { formatDuration, formatPace, formatSwimPace } from '../hooks/useActivities'
+import { formatPace, formatSwimPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { typeIcon, typeLabel, typeColor, isGymType } from '../sportMeta'
 
@@ -29,11 +29,74 @@ function parseTimeSecs(t: string): number {
   return parts[0]
 }
 
-function formatSecs(secs: number): string {
-  const h = Math.floor(secs / 3600)
-  const m = Math.floor((secs % 3600) / 60)
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
+
+// 配速拆分为「数值 + 单位」两部分，便于将单位弱化处理（参照距离字段的显示方式）
+function paceParts(type: Activity['type'], speed: number): { value: string; unit: string } {
+  if (type === 'Run') return { value: formatPace(speed), unit: '' }
+  if (type === 'Swim') {
+    const s = formatSwimPace(speed) // 形如 2'00"/100m
+    const i = s.indexOf('"')
+    return i >= 0 ? { value: s.slice(0, i + 1), unit: s.slice(i + 1) } : { value: s, unit: '' }
+  }
+  // 配速数值始终显示 3 位数字：整数部分 1 位 → 小数 2 位；整数部分 2 位 → 小数 1 位
+  const kmh = speed * 3.6
+  return { value: kmh >= 10 ? kmh.toFixed(1) : kmh.toFixed(2), unit: 'km/h' }
+}
+
+// 根据 start_date_local 的小时数划分五个时段
+function timePeriod(startLocal: string, locale: 'zh' | 'en'): string {
+  const hour = parseInt(startLocal.slice(11, 13), 10)
+  if (hour >= 5 && hour < 8) return locale === 'zh' ? '清晨' : 'Early Morning'
+  if (hour >= 8 && hour < 12) return locale === 'zh' ? '上午' : 'Morning'
+  if (hour >= 12 && hour < 17) return locale === 'zh' ? '下午' : 'Afternoon'
+  if (hour >= 17 && hour < 20) return locale === 'zh' ? '傍晚' : 'Evening'
+  return locale === 'zh' ? '深夜' : 'Late Night'
+}
+
+// 名称：优先使用原始 name；缺失时按「时段 + 运动类型」组合命名
+function activityName(a: Activity, locale: 'zh' | 'en'): string {
+  if (a.name && a.name.trim()) return a.name
+  const period = timePeriod(a.start_date_local, locale)
+  const type = typeLabel(a.type, locale)
+  return locale === 'zh' ? `${period}${type}` : `${period} ${type}`
+}
+
+// 运动类型胶囊：文字超出时，在胶囊内部左右循环滚动（marquee），始终固定宽度；未超出则静态显示
+function TypePill({ type, locale }: { type: Activity['type']; locale: string }) {
+  const windowRef = useRef<HTMLSpanElement>(null)
+  const [overflow, setOverflow] = useState(0)
+  const label = typeLabel(type, locale)
+  useEffect(() => {
+    const el = windowRef.current
+    if (!el) return
+    setOverflow(Math.max(0, el.scrollWidth - el.clientWidth))
+  }, [label])
+  const scrolling = overflow > 0
+  // 滚动速度恒定（约 14px/s），过短的文本也保证最低时长
+  const duration = Math.max(2.5, overflow / 14)
+  return (
+    <span
+      className="type-marquee-pill inline-flex align-middle text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ backgroundColor: typeColor(type) + '22', color: typeColor(type) }}
+    >
+      <span ref={windowRef} className="inline-block max-w-[9ch] overflow-hidden whitespace-nowrap">
+        <span
+          className={`inline-block whitespace-nowrap${scrolling ? ' type-marquee-content' : ''}`}
+          style={
+            scrolling
+              ? {
+                  '--marquee-distance': `-${overflow}px`,
+                  '--marquee-duration': `${duration}s`,
+                  willChange: 'transform',
+                }
+              : undefined
+          }
+        >
+          {typeIcon(type)}{label}
+        </span>
+      </span>
+    </span>
+  )
 }
 
 export function ActivityLog({ activities, years, year, setYear, selectedActivity, onSelectActivity, filter = 'all' }: ActivityLogProps) {
@@ -43,6 +106,8 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
   const [gymTypeFilter, setGymTypeFilter] = useState<string>('all')
 
   const isGym = filter === 'Gym'
+  // ELEVATION（爬升）列在所有、跑步、骑行、徒步分类下显示（健身分类无此字段）
+  const showElevation = filter === 'all' || filter === 'Run' || filter === 'Ride' || filter === 'Hike'
 
   const distFiltered = activities.filter((a) => {
     if (isGym) return true
@@ -89,13 +154,29 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
     : filter === 'Gym'  ? (locale === 'zh' ? '健身记录' : 'Gym Log')
     : t('activityLog')
 
+  // 当前运动类型名称，用于空状态文案
+  const sportName = locale === 'zh'
+    ? (filter === 'Run' ? '跑步' : filter === 'Ride' ? '骑行' : filter === 'Hike' ? '徒步' : filter === 'Gym' ? '健身' : '运动')
+    : (filter === 'Run' ? 'running' : filter === 'Ride' ? 'riding' : filter === 'Hike' ? 'hiking' : filter === 'Gym' ? 'gym' : 'sport')
+
+  // 选中年份但当前运动类型在该年无记录时，列表居中提示
+  const emptyMessage = sorted.length === 0
+    ? (year != null
+        ? (locale === 'zh' ? `${year} 年暂无${sportName}记录哦` : `No ${sportName} records in ${year}`)
+        : (locale === 'zh' ? `暂无${sportName}记录哦` : `No ${sportName} records yet`))
+    : null
+
+  const colCount = isGym ? 5 : (showElevation ? 8 : 7)
+
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">{logTitle}</h2>
         <span className="text-sm text-[var(--color-muted)]">
-          {t('showing')} {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, sorted.length)} {t('of')} {sorted.length}
+          {sorted.length > 0
+            ? `${t('showing')} ${page * PAGE_SIZE + 1}-${Math.min((page + 1) * PAGE_SIZE, sorted.length)} ${t('of')} ${sorted.length}`
+            : (locale === 'zh' ? '暂无记录' : 'No records')}
         </span>
       </div>
 
@@ -103,9 +184,9 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <button
           onClick={() => setYear(null)}
-          className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${year === null ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+          className={`px-3 py-1 rounded-full text-xs font-medium uppercase transition-all ${year === null ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
         >
-          All
+          {t('all')}
         </button>
         {years.map((y) => (
           <button key={y} onClick={() => { setYear(y); setPage(0) }}
@@ -137,7 +218,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         <div className="flex items-center gap-2 mb-5">
           {([['all', t('all')], ['5', '5km+'], ['10', '10km+'], ['20', '20km+'], ['40', '40km+']] as [DistanceFilter, string][]).map(([val, label]) => (
             <button key={val} onClick={() => { setDistFilter(val); setPage(0) }}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${distFilter === val ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
+              className={`px-3 py-1 rounded-full text-xs font-medium uppercase transition-all ${distFilter === val ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
             >
               {label}
             </button>
@@ -147,29 +228,31 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead>
-            <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
-              <th className="pb-3 font-medium">{t('date')}</th>
-              <th className="pb-3 font-medium">{t('type')}</th>
-              <th className="pb-3 font-medium">{t('name')}</th>
-              {isGym ? (
-                <>
-                  <th className="pb-3 font-medium">{t('duration')}</th>
-                  <th className="pb-3 font-medium">{t('hr')}</th>
-                </>
-              ) : (
-                <>
-                  <th className="pb-3 font-medium">{t('distance')}</th>
-                  <th className="pb-3 font-medium">{t('duration')}</th>
-                  <th className="pb-3 font-medium">{t('pace')}</th>
-                  <th className="pb-3 font-medium">{t('hr')}</th>
-                </>
-              )}
-            </tr>
+              <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
+                <th className="pb-3 font-medium w-[146px] text-left">{t('date')}</th>
+                <th className="pb-3 font-medium text-left">{t('name')}</th>
+                <th className="pb-3 font-medium w-[104px] text-center">{t('type')}</th>
+                {isGym ? (
+                  <>
+                    <th className="pb-3 font-medium w-[104px] text-center">{t('duration')}</th>
+                    <th className="pb-3 font-medium w-[60px] text-center">{t('hr')}</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="pb-3 font-medium w-[96px] text-center">{t('distance')}</th>
+                    <th className="pb-3 font-medium w-[104px] text-center">{t('duration')}</th>
+                    {showElevation && <th className="pb-3 font-medium w-[96px] text-center">{t('elevation')}</th>}
+                    <th className="pb-3 font-medium w-[88px] text-center">{t('pace')}</th>
+                    <th className="pb-3 font-medium w-[60px] text-center">{t('hr')}</th>
+                  </>
+                )}
+              </tr>
           </thead>
           <tbody>
-            {pageData.map((a) => (
+            {pageData.length > 0 ? (
+              pageData.map((a) => (
               <tr
                 key={a.run_id}
                 onClick={() => onSelectActivity?.(selectedActivity?.run_id === a.run_id ? null : a)}
@@ -179,41 +262,83 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                     : 'hover:bg-[var(--color-bg)]'
                 }`}
               >
-                <td className="py-3 text-[var(--color-muted)]">{a.start_date_local.slice(0, 16).replace('T', ' ')}</td>
-                <td className="py-3">
-                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: typeColor(a.type) + '22', color: typeColor(a.type) }}>
-                    {typeIcon(a.type)} {typeLabel(a.type, locale)}
-                  </span>
+                <td className="py-3 text-[var(--color-muted)] text-left">{a.start_date_local.slice(0, 16).replace('T', ' ')}</td>
+                <td className="py-3">{activityName(a, locale)}</td>
+                <td className="py-3 text-center">
+                  <TypePill type={a.type} locale={locale} />
                 </td>
-                <td className="py-3">{a.name || typeLabel(a.type, locale)}</td>
                 {isGym ? (
                   <>
-                    <td className="py-3 font-mono font-medium">{formatSecs(parseTimeSecs(a.moving_time))}</td>
-                    <td className="py-3 text-[var(--color-muted)]">{a.average_heartrate ? `${Math.round(a.average_heartrate)} bpm` : '--'}</td>
+                    <td className="py-3 font-mono font-medium text-center">
+                      {Math.round(parseTimeSecs(a.moving_time) / 60)}
+                      <span className="text-[var(--color-muted)] ml-1 font-normal text-xs">min</span>
+                    </td>
+                    <td className="py-3 text-center">
+                      {a.average_heartrate != null ? (
+                        <span className="font-mono font-medium">{String(Math.round(a.average_heartrate)).padStart(3, '0')}</span>
+                      ) : (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      )}
+                    </td>
                   </>
                 ) : (
                   <>
-                    <td className="py-3 font-mono font-medium">
-                      {(a.distance / 1000).toFixed(1)}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">km</span>
+                    <td className="py-3 font-mono font-medium text-center">
+                      {a.type === 'Training' || a.distance == null || a.distance === 0 ? (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      ) : (() => {
+                        const km = a.distance / 1000
+                        // 数值始终显示 3 位数字：<10 → 小数 2 位；10~100 → 小数 1 位；>100 → 仅整数部分
+                        const text = km > 100 ? km.toFixed(0) : km >= 10 ? km.toFixed(1) : km.toFixed(2)
+                        return <>{text}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">km</span></>
+                      })()}
                     </td>
-                    <td className="py-3 text-[var(--color-muted)]">{formatDuration(a.moving_time)}</td>
-                    <td className="py-3 text-[var(--color-muted)]">
-                      {a.type === 'Run'
-                        ? formatPace(a.average_speed)
-                        : a.type === 'Swim'
-                          ? formatSwimPace(a.average_speed)
-                          : `${(a.average_speed * 3.6).toFixed(1)} km/h`}
+                    <td className="py-3 font-mono font-medium text-center">
+                      {Math.round(parseTimeSecs(a.moving_time) / 60)}
+                      <span className="text-[var(--color-muted)] ml-1 font-normal text-xs">min</span>
                     </td>
-                    <td className="py-3 text-[var(--color-muted)]">{a.average_heartrate ? Math.round(a.average_heartrate) : '--'}</td>
+                    {showElevation && (
+                      <td className="py-3 font-mono font-medium text-center">
+                        {a.elevation_gain != null ? (
+                          <>{Math.round(a.elevation_gain)}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">m</span></>
+                        ) : (
+                          <span className="text-[var(--color-muted)]">--</span>
+                        )}
+                      </td>
+                    )}
+                    <td className="py-3 font-mono font-medium text-center">
+                      {a.type === 'Training' || a.average_speed == null || a.average_speed === 0 ? (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      ) : (() => {
+                        const p = paceParts(a.type, a.average_speed)
+                        const showPaceUnit = filter !== 'all'
+                        return <>{p.value}{showPaceUnit && p.unit && <span className="text-[var(--color-muted)] ml-1 font-normal text-xs">{p.unit}</span>}</>
+                      })()}
+                    </td>
+                    <td className="py-3 text-center">
+                      {a.average_heartrate != null ? (
+                        <span className="font-mono font-medium">{String(Math.round(a.average_heartrate)).padStart(3, '0')}</span>
+                      ) : (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      )}
+                    </td>
                   </>
                 )}
               </tr>
-            ))}
+              ))
+            ) : (
+              <tr>
+                <td colSpan={colCount} className="py-20 text-center text-sm text-[var(--color-muted)]">
+                  {emptyMessage}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Pagination */}
+      {sorted.length > 0 && (
       <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-border)]">
         <div className="flex items-center gap-5">
           <button onClick={() => setPage(0)} disabled={page === 0}
@@ -229,6 +354,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
             className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '末页' : 'Last'}>»</button>
         </div>
       </div>
+      )}
     </div>
   )
 }

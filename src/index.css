@@ -28,6 +28,18 @@
 [data-filter="Ride"] { --color-accent: #3b82f6; }
 [data-filter="Hike"] { --color-accent: #22c55e; }
 [data-filter="Gym"] { --color-accent: #a855f7; }
+[data-filter="tracks"] { --color-accent: #06b6d4; }
+[data-filter="checkin"] { --color-accent: #ec4899; }
+
+@keyframes type-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(var(--marquee-distance, 0)); }
+}
+
+/* 仅当鼠标悬停到胶囊范围内时，才开始滚动 */
+.type-marquee-pill:hover .type-marquee-content {
+  animation: type-marquee var(--marquee-duration, 3s) linear infinite alternate;
+}
 
 body {
   background-color: var(--color-bg);
