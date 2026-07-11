@@ -1,6 +1,6 @@
 import type { Activity, SportFilter } from '../types'
 import { formatDistance, parseMovingTime } from '../hooks/useActivities'
-import { isGymType } from '../sportMeta'
+import { isGymType, isRunType, isRideType, isHikeType } from '../sportMeta'
 import { useLocale } from '../hooks/useLocale'
 import { GOALS, DEFAULT_GOAL } from '../config'
 
@@ -14,6 +14,14 @@ interface StatsCardsProps {
 
 export function StatsCards({ activities, allActivities, year, filter, onSelectActivity }: StatsCardsProps) {
   const { t, locale } = useLocale()
+  const matchesFilter = (type: string): boolean => {
+    if (filter === 'all') return true
+    if (filter === 'Run') return isRunType(type)
+    if (filter === 'Ride') return isRideType(type)
+    if (filter === 'Hike') return isHikeType(type)
+    if (filter === 'Gym') return isGymType(type)
+    return type === filter
+  }
   const goal = GOALS[filter] ?? DEFAULT_GOAL
   // For Gym, goals are in minutes; for others, goals are in km → convert to meters
   const yearGoalMeters  = goal.unit === 'time' ? 0 : goal.yearly  * 1000
@@ -42,7 +50,7 @@ export function StatsCards({ activities, allActivities, year, filter, onSelectAc
   const lastYearActivities = allActivities.filter((a) => {
     const d = new Date(a.start_date_local)
     if (d.getFullYear() !== currentYear - 1) return false
-    if (filter !== 'all' && a.type !== filter) return false
+    if (!matchesFilter(a.type)) return false
     const aDayOfYear = Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 1).getTime()) / 86400000)
     return aDayOfYear <= dayOfYear
   })
@@ -67,7 +75,7 @@ export function StatsCards({ activities, allActivities, year, filter, onSelectAc
     const targetMonth = now.getMonth() === 0 ? 11 : now.getMonth() - 1
     const targetYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
     if (d.getFullYear() !== targetYear || d.getMonth() !== targetMonth) return false
-    if (filter !== 'all' && a.type !== filter) return false
+    if (!matchesFilter(a.type)) return false
     return d.getDate() <= now.getDate()
   })
   const lastMonthDistance = lastMonthActivities.reduce((s, a) => s + a.distance, 0)
@@ -92,7 +100,7 @@ export function StatsCards({ activities, allActivities, year, filter, onSelectAc
   const lastWeekActivities = allActivities.filter((a) => {
     const d = new Date(a.start_date_local)
     if (d < lastWeekStart || d > lastWeekSamePoint) return false
-    if (filter !== 'all' && a.type !== filter) return false
+    if (!matchesFilter(a.type)) return false
     return true
   })
   const lastWeekDistance = lastWeekActivities.reduce((s, a) => s + a.distance, 0)

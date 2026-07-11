@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import type { GitHubUser } from '../types/checkin'
+import type { GitHubUser } from '../types'
 
-const STORAGE_TOKEN_KEY = 'checkin_github_token'
-const STORAGE_USER_KEY = 'checkin_github_user'
+const STORAGE_TOKEN_KEY = 'github_token'
+const STORAGE_USER_KEY = 'github_user'
 
 export interface GitHubAuthContextValue {
   token: string | null

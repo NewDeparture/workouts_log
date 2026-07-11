@@ -17,6 +17,7 @@ interface AppConfig {
   locale: Locale
   theme: 'light' | 'dark' | 'system'
   goals: Record<string, GoalConfig>
+  birthdayMonth?: string
 }
 
 const config = rawConfig as AppConfig
@@ -30,3 +31,5 @@ export const DEFAULT_GOAL: GoalConfig = GOALS.all ?? {
   weekly: 35,
   unit: 'distance',
 }
+/** 出生年月 YYYY-MM，用于 RUNNING.LIFE 一生运动热力图 */
+export const BIRTHDAY_MONTH: string = config.birthdayMonth ?? '1996-01'

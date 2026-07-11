@@ -1,4 +1,5 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, lazy, Suspense } from 'react'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import './index.css'
 import type { Activity, SportFilter } from './types'
 import { useFilteredActivities, getAvailableYears, extractProvince } from './hooks/useActivities'
@@ -13,14 +14,18 @@ import { RouteMap } from './components/RouteMap'
 import { CalendarWidget } from './components/CalendarWidget'
 import { ProfileCard } from './components/ProfileCard'
 import { PersonalBest } from './components/PersonalBest'
-import { TracksPage } from './components/TracksPage'
+const TracksPage = lazy(() => import('./components/TracksPage').then(m => ({ default: m.TracksPage })))
 import { ChinaMap } from './components/ChinaMap'
-import { CheckinPage } from './components/CheckinPage'
+const LifePage = lazy(() => import('./components/LifePage').then(m => ({ default: m.LifePage })))
 import rawActivities from './static/activities.json'
 
 const activities = rawActivities as Activity[]
 
-type Page = 'home' | 'tracks' | 'checkin'
+const pageFallback = (
+  <div className="flex items-center justify-center py-20 text-[var(--color-muted)] text-sm">Loading…</div>
+)
+
+type Page = 'home' | 'tracks' | 'life'
 
 export default function App() {
   const { dark, toggle } = useTheme()
@@ -78,14 +83,22 @@ export default function App() {
       />
 
       {page === 'tracks' ? (
-        <TracksPage
-          activities={activities}
-          dark={dark}
-          onSelectActivity={setSelectedActivity}
-          onBack={() => setPage('home')}
-        />
-      ) : page === 'checkin' ? (
-        <CheckinPage />
+        <ErrorBoundary>
+          <Suspense fallback={pageFallback}>
+            <TracksPage
+              activities={activities}
+              dark={dark}
+              onSelectActivity={setSelectedActivity}
+              onBack={() => setPage('home')}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      ) : page === 'life' ? (
+        <ErrorBoundary>
+          <Suspense fallback={pageFallback}>
+            <LifePage activities={activities} />
+          </Suspense>
+        </ErrorBoundary>
       ) : (
       <main className="max-w-[1400px] mx-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] xl:grid-cols-[1fr_380px] gap-6 items-start">
@@ -116,12 +129,14 @@ export default function App() {
                 setSelectedActivity(null)
               }}
             />
-            <RouteMap
-              activities={provinceFiltered}
-              selectedActivity={selectedActivity}
-              dark={dark}
-              onClearSelection={() => setSelectedActivity(null)}
-            />
+            <ErrorBoundary>
+              <RouteMap
+                activities={provinceFiltered}
+                selectedActivity={selectedActivity}
+                dark={dark}
+                onClearSelection={() => setSelectedActivity(null)}
+              />
+            </ErrorBoundary>
             <PersonalBest activities={activities} onSelectActivity={setSelectedActivity} />
             <CalendarWidget
               activities={filtered}

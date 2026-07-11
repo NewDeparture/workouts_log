@@ -45,7 +45,7 @@ export const messages: Record<Locale, Record<string, string>> = {
     page: '第',
     pageOf: '页 / 共',
     pages: '页',
-    checkin: '打卡',
+    life: '运动人生',
   },
   en: {
     totalDistance: 'Total Distance',
@@ -91,6 +91,6 @@ export const messages: Record<Locale, Record<string, string>> = {
     page: 'Page',
     pageOf: 'of',
     pages: '',
-    checkin: 'Habits',
+    life: 'Life',
   },
 }

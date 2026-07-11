@@ -10,7 +10,22 @@
         var stored = localStorage.getItem('theme')
         var dark = stored === 'dark' ||
           (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        if (dark) document.documentElement.classList.add('dark')
+        var root = document.documentElement
+        if (dark) root.classList.add('dark')
+        // 第一帧即用内联背景色，避免外部 CSS 解析前露出浏览器默认白底
+        root.style.backgroundColor = dark ? '#0d1117' : '#f6f8fa'
+        // 首帧禁用 body 背景过渡，防止 白→黑 以动画形式闪烁
+        var s = document.createElement('style')
+        s.id = '__no-transition'
+        s.textContent = 'body{transition:none !important}'
+        root.appendChild(s)
+        window.addEventListener('load', function () {
+          requestAnimationFrame(function () {
+            var el = document.getElementById('__no-transition')
+            if (el) el.remove()
+            root.style.removeProperty('background-color')
+          })
+        })
       })()
     </script>
   </head>

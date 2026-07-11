@@ -3,8 +3,8 @@ import { RefreshCw, CheckCircle, XCircle, Clock, Loader, Route } from 'lucide-re
 import type { Activity, SportFilter } from '../types'
 import { useLocale } from '../hooks/useLocale'
 import { useGitHubAuthContext } from '../hooks/useGitHubAuthContext'
-import { formatDistance, parseMovingTime, extractProvince } from '../hooks/useActivities'
-import { typeIcon } from '../sportMeta'
+import { formatDistance, formatDuration, parseMovingTime, extractProvince } from '../hooks/useActivities'
+import { typeIcon, typeLabel, isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
 import rawConfig from '@config'
 
 const config = rawConfig as { repoOwner?: string; repoName?: string }
@@ -48,14 +48,25 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
     })()
   }, [token])
 
-  const filteredActivities = filter === 'all' ? activities : activities.filter(a => a.type === filter)
-
+  const filteredActivities = activities.filter((a) => {
+    if (filter === 'all') return true
+    if (filter === 'Run') return isRunType(a.type)
+    if (filter === 'Ride') return isRideType(a.type)
+    if (filter === 'Hike') return isHikeType(a.type)
+    if (filter === 'Gym') return isGymType(a.type)
+    return a.type === filter
+  })
   const totalDistance = filteredActivities.reduce((s, a) => s + a.distance, 0)
   const totalCount = filteredActivities.length
   const totalSeconds = filteredActivities.reduce((s, a) => s + parseMovingTime(a.moving_time), 0)
 
-  const allDates = activities.map((a) => new Date(a.start_date_local).getFullYear())
-  const yearsActive = allDates.length > 0 ? (Math.max(...allDates) - Math.min(...allDates) + 1) : 0
+  // 按当前筛选类型统计「实际有该类型运动的年份数」（去重），
+  // 而非全部活动的总跨度；这样切换运动类型时年份数随之变化，
+  // 且不会把没有任何该类型运动的年份计入。
+  const activeYears = new Set(
+    filteredActivities.map((a) => new Date(a.start_date_local).getFullYear())
+  )
+  const yearsActive = activeYears.size
 
   const countries = new Set<string>()
   const provinces = new Set<string>()
@@ -94,8 +105,9 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
     }
   }
 
-  const latest = activities.length > 0
-    ? [...activities].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime())[0]
+  // 取当前筛选分类下最新的一条活动（全部页 = 全量最新；骑行页 = 最新骑行，以此类推）
+  const latest = filteredActivities.length > 0
+    ? [...filteredActivities].sort((a, b) => new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime())[0]
     : null
 
   const formatDate = (dateStr: string) => {
@@ -198,6 +210,30 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-5 transition-all duration-300 hover:shadow-lg hover:shadow-[var(--color-accent)]/5 hover:border-[var(--color-accent)]/30 hover:bg-[var(--color-accent)]/5">
+      {/* Sync status（顶部右上角，独立于最近活动） */}
+      {latest && (
+        <div className="flex items-center justify-end gap-2 mb-3">
+          {lastSyncedAt && runStatus === 'idle' && (
+            <span className="text-xs text-[var(--color-muted)] flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {formatSyncTime(lastSyncedAt)}
+            </span>
+          )}
+          <StatusBadge />
+          {token && (
+            <button
+              onClick={() => void triggerSync()}
+              disabled={runStatus === 'triggering' || runStatus === 'queued' || runStatus === 'in_progress'}
+              title={locale === 'zh' ? '触发 Strava 同步' : 'Trigger Strava sync'}
+              className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-accent)] disabled:opacity-40 transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${runStatus === 'in_progress' || runStatus === 'triggering' ? 'animate-spin' : ''}`} />
+              {locale === 'zh' ? '同步' : 'Sync'}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Distance */}
       <div className="text-center">
         <p className="text-3xl font-bold font-mono flex items-center justify-center gap-2">
@@ -214,7 +250,7 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
         </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2 mt-4 text-center border-t border-[var(--color-border)] pt-4">
+      <div className="grid grid-cols-3 gap-2 mt-4 text-center border-t border-[var(--color-border)] py-4">
         <div>
           <p className="text-xs text-[var(--color-muted)] flex items-center justify-center gap-1">
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -238,37 +274,19 @@ export function ProfileCard({ activities, filter = 'all' }: ProfileCardProps) {
         </div>
       </div>
 
-      {/* Latest Activity + Sync */}
+      {/* 最近活动（单行：左标签 · 右记录） */}
       {latest && (
-        <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
-          <div className="flex items-center justify-between mb-1">
-            <p className="text-xs text-[var(--color-muted)]">{locale === 'zh' ? '最近活动' : 'Latest Activity'}</p>
-            <div className="flex items-center gap-2">
-              {lastSyncedAt && runStatus === 'idle' && (
-                <span className="text-xs text-[var(--color-muted)] flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {formatSyncTime(lastSyncedAt)}
-                </span>
-              )}
-              <StatusBadge />
-              {token && (
-                <button
-                  onClick={() => void triggerSync()}
-                  disabled={runStatus === 'triggering' || runStatus === 'queued' || runStatus === 'in_progress'}
-                  title={locale === 'zh' ? '触发 Strava 同步' : 'Trigger Strava sync'}
-                  className="flex items-center gap-1 text-xs text-[var(--color-muted)] hover:text-[var(--color-accent)] disabled:opacity-40 transition-colors"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${runStatus === 'in_progress' || runStatus === 'triggering' ? 'animate-spin' : ''}`} />
-                  {locale === 'zh' ? '同步' : 'Sync'}
-                </button>
-              )}
-            </div>
-          </div>
-          <p className="text-sm font-medium">
-            {typeIcon(latest.type)}
-            {latest.name || (latest.type === 'Run' ? 'Run' : 'Ride')}
-            <span className="text-[var(--color-muted)] font-normal"> · {formatDistance(latest.distance)} km · {formatDate(latest.start_date_local)}</span>
-          </p>
+        <div className="pt-4 border-t border-[var(--color-border)] flex items-center justify-between gap-2">
+          <span className="text-xs text-[var(--color-muted)] flex items-center gap-1 shrink-0">
+            <Clock className="w-3 h-3" />
+            {locale === 'zh' ? '最近' : 'Recently'}
+          </span>
+          <span className="text-sm font-medium min-w-0 truncate text-right">
+            {typeIcon(latest.type)} {typeLabel(latest.type, locale)}
+            <span className="text-[var(--color-muted)] font-normal ml-1">
+              · {isGymType(latest.type) ? formatDuration(latest.moving_time) : `${formatDistance(latest.distance)} km`} · {formatDate(latest.start_date_local)}
+            </span>
+          </span>
         </div>
       )}
     </div>

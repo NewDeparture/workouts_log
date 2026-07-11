@@ -16,7 +16,7 @@ export const SPORT_META: Record<string, SportMeta> = {
   'Indoor Ride':  { icon: '🚴', zh: '室内骑行', en: 'Indoor Ride',  color: '#1d4ed8' },
   Hike:           { icon: '🥾', zh: '徒步',     en: 'Hike',         color: '#22c55e' },
   Walking:        { icon: '🚶', zh: '步行',     en: 'Walking',      color: '#16a34a' },
-  Mountaineering: { icon: '⛰️', zh: '登山',     en: 'Mountaineering', color: '#15803d' },
+  Mountaineering: { icon: '🧗', zh: '登山',     en: 'Mountaineering', color: '#15803d' },
   Swim:           { icon: '🏊', zh: '游泳',     en: 'Swim',         color: '#06b6d4' },
   Rowing:         { icon: '🚣', zh: '划船',     en: 'Rowing',       color: '#0891b2' },
   RoadTrip:       { icon: '🚗', zh: '驾车',     en: 'Road Trip',    color: '#64748b' },
@@ -73,6 +73,9 @@ export function categoryColorOf(type: string): string {
 export const isRunType = (t: string) => categoryOf(t) === 'run'
 export const isRideType = (t: string) => categoryOf(t) === 'ride'
 export const isHikeType = (t: string) => categoryOf(t) === 'hike'
+
+// 「健身」为兜底分类：除已明确归入 run/ride/hike 的类型外，
+// 其余一切无法判定的类型一律归入健身（含游泳、划船、力量训练等）。
 export const isGymType = (t: string) => categoryOf(t) === 'gym'
 
 const DEFAULT_ICON = '📌'

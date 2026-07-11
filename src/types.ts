@@ -15,6 +15,12 @@ export interface Activity {
   streak: number
 }
 
+export interface GitHubUser {
+  login: string
+  avatar_url: string
+  name: string | null
+}
+
 export type SportFilter = 'all' | 'Run' | 'Ride' | 'Hike' | 'Gym'
 export type WorkoutType = 'WeightTraining' | 'Workout' | 'StairStepper' | 'WaterSport'
 export const WORKOUT_TYPES: WorkoutType[] = ['WeightTraining', 'Workout', 'StairStepper', 'WaterSport']

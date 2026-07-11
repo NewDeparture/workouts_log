@@ -72,7 +72,11 @@ function TypePill({ type, locale }: { type: Activity['type']; locale: 'zh' | 'en
     if (!el) return
     setOverflow(Math.max(0, el.scrollWidth - el.clientWidth))
   }, [label])
-  const scrolling = overflow > 0
+  // 短标签（中文 ≤3 字）永不启用滚动：单个 emoji 的渲染宽度在不同系统上可能让短文本
+  // 产生亚像素溢出（如「🧗登山」），被误判为需滚动后内层会挂上 marquee 类；鼠标悬停时
+  // 该层触发 transform 动画、被提升为合成层，文字抗锯齿由子像素退化为灰度，看起来
+  // 「更细、字体不一样」。以标签长度兜底可让所有短类型无论 emoji 宽度都保持静态一致。
+  const scrolling = label.length > 3 && overflow > 4
   // 滚动速度恒定（约 14px/s），过短的文本也保证最低时长
   const duration = Math.max(2.5, overflow / 14)
   return (
@@ -88,7 +92,6 @@ function TypePill({ type, locale }: { type: Activity['type']; locale: 'zh' | 'en
               ? ({
                   '--marquee-distance': `-${overflow}px`,
                   '--marquee-duration': `${duration}s`,
-                  willChange: 'transform',
                 } as CSSProperties)
               : undefined
           }
@@ -167,7 +170,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         : (locale === 'zh' ? `暂无${sportName}记录哦` : `No ${sportName} records yet`))
     : null
 
-  const colCount = isGym ? 5 : (showElevation ? 8 : 7)
+  const colCount = isGym ? 6 : (showElevation ? 8 : 7)
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
@@ -233,12 +236,13 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
           <thead>
               <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
                 <th className="pb-3 font-medium w-[146px] text-left">{t('date')}</th>
-                <th className="pb-3 font-medium text-left">{t('name')}</th>
-                <th className="pb-3 font-medium w-[104px] text-center">{t('type')}</th>
+                <th className="pb-3 font-medium w-[200px] text-left">{t('name')}</th>
+                <th className="pb-3 font-medium w-[128px] text-center">{t('type')}</th>
                 {isGym ? (
                   <>
-                    <th className="pb-3 font-medium w-[104px] text-center">{t('duration')}</th>
-                    <th className="pb-3 font-medium w-[60px] text-center">{t('hr')}</th>
+                    <th className="pb-3 font-medium w-[128px] text-center">{t('distance')}</th>
+                    <th className="pb-3 font-medium w-[128px] text-center">{t('duration')}</th>
+                    <th className="pb-3 font-medium w-[72px] text-center">{t('hr')}</th>
                   </>
                 ) : (
                   <>
@@ -270,6 +274,15 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                 </td>
                 {isGym ? (
                   <>
+                    <td className="py-3 font-mono font-medium text-center">
+                      {a.distance == null || a.distance === 0 ? (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      ) : (() => {
+                        const km = a.distance / 1000
+                        const text = km > 100 ? km.toFixed(0) : km >= 10 ? km.toFixed(1) : km.toFixed(2)
+                        return <>{text}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">km</span></>
+                      })()}
+                    </td>
                     <td className="py-3 font-mono font-medium text-center">
                       {Math.round(parseTimeSecs(a.moving_time) / 60)}
                       <span className="text-[var(--color-muted)] ml-1 font-normal text-xs">min</span>

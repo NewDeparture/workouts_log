@@ -5,7 +5,7 @@ import { isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
 import { useLocale } from '../hooks/useLocale'
 import { useGitHubAuthContext } from '../hooks/useGitHubAuthContext'
 
-type Page = 'home' | 'tracks' | 'checkin'
+type Page = 'home' | 'tracks' | 'life'
 
 interface HeaderProps {
   filter: SportFilter
@@ -154,7 +154,7 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
   const navItems: { label: string; page: Page }[] = [
     { label: t('home'), page: 'home' },
     { label: t('tracks'), page: 'tracks' },
-    { label: t('checkin'), page: 'checkin' },
+    { label: t('life'), page: 'life' },
   ]
 
   const activeTabIndex = page === 'home' ? tabs.findIndex((tab) => tab.value === filter) : -1
@@ -193,8 +193,15 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
     <header
       className="sticky top-0 z-50 backdrop-blur-md"
       style={{
+        // 与 body 背景使用同一套径向渐变，并固定到视口，
+        // 保证顶栏与下方背景在每个横向位置上色彩始终对齐
         backgroundColor: 'color-mix(in srgb, var(--color-bg) 50%, transparent)',
-        backgroundImage: 'linear-gradient(to right, color-mix(in srgb, var(--color-accent) 20%, transparent), color-mix(in srgb, var(--color-accent) 9%, transparent))',
+        backgroundImage: [
+          'radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--color-accent) 22%, transparent), transparent 55%)',
+          'radial-gradient(120% 120% at 100% 100%, color-mix(in srgb, var(--color-accent) 16%, transparent), transparent 55%)',
+          'radial-gradient(150% 100% at 50% 0%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 45%)',
+        ].join(','),
+        backgroundAttachment: 'fixed',
       }}
     >
       <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">

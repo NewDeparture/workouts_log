@@ -29,6 +29,7 @@ env:
   # --- Git 提交身份 ---
   GITHUB_NAME: LYX
   GITHUB_EMAIL: oou@live.com
+  BIRTHDAY_MONTH: 1996-01 # If you want to generate the month of life, set it to your birthday month, format is YYYY-MM
 
   # --- GPS 数据过滤 ---
   # IGNORE_BEFORE_SAVING: True  # 保存前过滤数据（需要时取消注释）

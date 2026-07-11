@@ -45,6 +45,10 @@ goals:
     weekly: 150    # 2.5 小时
     unit: time
 
+# ── 运动人生（RUNNING.LIFE）────────────────────────────────────────────────────
+# 出生年月，用于生成一生运动热力图（格式：YYYY-MM）
+birthdayMonth: '1996-01'
+
 # ── 打卡模块 ──────────────────────────────────────────────────────────────────
 # GitHub OAuth App 的 Client ID（Device Flow 不需要 client_secret，client_id 可公开）
 # 注册地址：https://github.com/settings/applications/new

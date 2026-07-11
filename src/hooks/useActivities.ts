@@ -82,6 +82,7 @@ export function formatDistance(meters: number): string {
   return Math.round(meters / 1000).toString()
 }
 
+
 export function formatPace(speedMs: number): string {
   if (!speedMs) return '--'
   const paceMin = 1000 / 60 / speedMs

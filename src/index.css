@@ -29,7 +29,7 @@
 [data-filter="Hike"] { --color-accent: #22c55e; }
 [data-filter="Gym"] { --color-accent: #a855f7; }
 [data-filter="tracks"] { --color-accent: #06b6d4; }
-[data-filter="checkin"] { --color-accent: #ec4899; }
+[data-filter="life"] { --color-accent: #ec4899; }
 
 @keyframes type-marquee {
   from { transform: translateX(0); }
