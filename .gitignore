@@ -19,6 +19,7 @@ install.err
 .sass-cache/
 _posts/
 _site/
+FIT_OUT/
 
 .mypy_cache
 
