@@ -5,6 +5,7 @@ import geopy
 from config import TYPE_DICT
 from geopy.geocoders import Nominatim
 from sqlalchemy import (
+    Boolean,
     Column,
     Float,
     Integer,
@@ -23,8 +24,8 @@ Base = declarative_base()
 # 反向地理编码（经纬度 -> 地名）相关配置
 # User-Agent 需符合 Nominatim 使用政策：包含应用标识与联系方式
 NOMINATIM_USER_AGENT = "workouts-log/1.0 (https://github.com/jimerun/workouts_log)"
-# 两次请求之间的最小间隔（秒），遵守 Nominatim 约 1 req/s 的限制，避免被限流
-GEOCODE_MIN_INTERVAL = 1.1
+# 两次请求之间的最小间隔（秒），遵守 Nominatim 约 1 req/s 的限制，预留裕度避免被限流
+GEOCODE_MIN_INTERVAL = 1.5
 # 单次请求超时（秒）
 GEOCODE_TIMEOUT = 10
 # 失败最大重试次数
@@ -35,7 +36,7 @@ GEOCODE_RETRY_BACKOFF = 2.0
 geopy.geocoders.options.default_user_agent = NOMINATIM_USER_AGENT
 # reverse the location (lat, lon) -> location detail
 # rate_limit 关闭，由下方 _throttle_geocode 统一控制请求间隔
-g = Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=GEOCODE_TIMEOUT, rate_limit=False)
+g = Nominatim(user_agent=NOMINATIM_USER_AGENT, timeout=GEOCODE_TIMEOUT)
 
 _last_geocode_ts = 0.0
 
@@ -105,6 +106,7 @@ class Activity(Base):
     elevation_gain = Column(Float)
     streak = None
     source = Column(String)
+    no_gps = Column(Boolean, default=False)  # 标记室内/无GPS活动，跳过地理编码
 
     def to_dict(self):
         out = {}
@@ -139,6 +141,7 @@ def update_or_create_activity(session, run_activity):
                 location_country = reverse_geocode(start_point)
             start_lat = start_point.lat if start_point else None
             start_lon = start_point.lon if start_point else None
+            no_gps = start_point is None  # 无GPS坐标时标记，后续跳过地理编码
 
             activity = Activity(
                 run_id=run_activity.id,
@@ -152,6 +155,7 @@ def update_or_create_activity(session, run_activity):
                 location_country=location_country,
                 start_lat=start_lat,
                 start_lon=start_lon,
+                no_gps=no_gps,
                 average_heartrate=run_activity.average_heartrate,
                 average_speed=float(run_activity.average_speed),
                 elevation_gain=(
@@ -189,6 +193,9 @@ def update_or_create_activity(session, run_activity):
             if start_point is not None:
                 activity.start_lat = start_point.lat
                 activity.start_lon = start_point.lon
+                activity.no_gps = False  # 有坐标后清除标记
+            elif activity.start_lat is None:
+                activity.no_gps = True   # 从未有过坐标，标记为无GPS
     except Exception as e:
         print(f"something wrong with {run_activity.id}")
         print(str(e))
@@ -200,7 +207,7 @@ def backfill_location_country(session):
     """对库中已经存在但 location_country 为空、且有起点的记录补跑反向地理编码。
 
     在每次导入新文件后调用（见 generator.sync_from_data_dir），用于补全之前因为
-    Nominatim 限流 / 超时 / 无网络而解析失败的记录。无坐标（如室内活动）的记录会被跳过。
+    Nominatim 限流 / 超时 / 无网络而解析失败的记录。已标记 no_gps 的记录会被跳过。
     """
     rows = (
         session.query(Activity)
@@ -211,6 +218,7 @@ def backfill_location_country(session):
             )
             & Activity.start_lat.isnot(None)
             & Activity.start_lon.isnot(None)
+            & (Activity.no_gps == False)
         )
         .all()
     )
