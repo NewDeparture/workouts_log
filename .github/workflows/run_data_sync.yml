@@ -24,7 +24,7 @@ on:
 # 全局环境变量
 env:
   # --- 数据源配置 ---
-  RUN_TYPE: coros
+  RUN_TYPE: coros_api
 
   # --- Git 提交身份 ---
   GITHUB_NAME: LYX
@@ -92,14 +92,22 @@ jobs:
             ${{ env.DATA_CACHE_PREFIX }}-${{ github.sha }}-
             ${{ env.DATA_CACHE_PREFIX }}-
 
-      # COROS 手表数据同步（当前 RUN_TYPE=coros，此步骤将执行）
+      # COROS 手表数据同步（通过下载并解析FIT文件）
       - name: Run sync Coros script
         if: env.RUN_TYPE == 'coros'
         run: |
           python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }}
         # 如果只需要同步跑步数据，添加 --only-run 参数：
         # python run_page/coros_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
-    
+
+      # COROS 手表数据同步（通过coros网页API同步）
+      - name: Run sync Coros-API script
+        if: env.RUN_TYPE == 'coros_api'
+        run: |
+          python run_page/coros_api_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }}
+        # 如果只需要同步跑步数据，添加 --only-run 参数：
+        # python run_page/coros_api_sync.py ${{ secrets.COROS_ACCOUNT }} ${{ secrets.COROS_PASSWORD }} --only-run
+
       # # Keep 数据同步（含 GPX）
       - name: Run sync Keep script
         if: env.RUN_TYPE == 'keep'

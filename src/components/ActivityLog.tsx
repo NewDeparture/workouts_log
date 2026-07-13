@@ -170,7 +170,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         : (locale === 'zh' ? `暂无${sportName}记录哦` : `No ${sportName} records yet`))
     : null
 
-  const colCount = isGym ? 6 : (showElevation ? 8 : 7)
+  const colCount = isGym ? 7 : (showElevation ? 8 : 7)
 
   return (
     <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
@@ -235,13 +235,14 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         <table className="w-full table-fixed text-sm">
           <thead>
               <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
-                <th className="pb-3 font-medium w-[146px] text-left">{t('date')}</th>
-                <th className="pb-3 font-medium w-[200px] text-left">{t('name')}</th>
-                <th className="pb-3 font-medium w-[128px] text-center">{t('type')}</th>
+                <th className={`pb-3 font-medium text-left ${isGym ? 'w-[146px]' : 'w-[136px]'}`}>{t('date')}</th>
+                <th className={`pb-3 font-medium text-left ${isGym ? 'w-[200px]' : ''}`}>{t('name')}</th>
+                <th className={`pb-3 font-medium text-center ${isGym ? 'w-[128px]' : 'w-[110px]'}`}>{t('type')}</th>
                 {isGym ? (
                   <>
                     <th className="pb-3 font-medium w-[128px] text-center">{t('distance')}</th>
                     <th className="pb-3 font-medium w-[128px] text-center">{t('duration')}</th>
+                    <th className="pb-3 font-medium w-[72px] text-center">{t('calories')}</th>
                     <th className="pb-3 font-medium w-[72px] text-center">{t('hr')}</th>
                   </>
                 ) : (
@@ -249,7 +250,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                     <th className="pb-3 font-medium w-[96px] text-center">{t('distance')}</th>
                     <th className="pb-3 font-medium w-[104px] text-center">{t('duration')}</th>
                     {showElevation && <th className="pb-3 font-medium w-[96px] text-center">{t('elevation')}</th>}
-                    <th className="pb-3 font-medium w-[88px] text-center">{t('pace')}</th>
+                    <th className="pb-3 font-medium w-[88px] text-center">{filter === 'Run' ? t('pace') : t('speed')}</th>
                     <th className="pb-3 font-medium w-[60px] text-center">{t('hr')}</th>
                   </>
                 )}
@@ -279,13 +280,20 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                         <span className="text-[var(--color-muted)]">---</span>
                       ) : (() => {
                         const km = a.distance / 1000
-                        const text = km > 100 ? km.toFixed(0) : km >= 10 ? km.toFixed(1) : km.toFixed(2)
-                        return <>{text}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">km</span></>
+                        const text = km >= 10 ? km.toFixed(1) : km.toFixed(2)
+                        return <>{text}</>
                       })()}
                     </td>
                     <td className="py-3 font-mono font-medium text-center">
                       {Math.round(parseTimeSecs(a.moving_time) / 60)}
                       <span className="text-[var(--color-muted)] ml-1 font-normal text-xs">min</span>
+                    </td>
+                    <td className="py-3 font-mono font-medium text-center">
+                      {a.calories != null ? (
+                        Math.round(a.calories)
+                      ) : (
+                        <span className="text-[var(--color-muted)]">---</span>
+                      )}
                     </td>
                     <td className="py-3 text-center">
                       {a.average_heartrate != null ? (
@@ -298,13 +306,12 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                 ) : (
                   <>
                     <td className="py-3 font-mono font-medium text-center">
-                      {a.type === 'Training' || a.distance == null || a.distance === 0 ? (
+                      {a.distance == null || a.distance === 0 ? (
                         <span className="text-[var(--color-muted)]">---</span>
                       ) : (() => {
                         const km = a.distance / 1000
-                        // 数值始终显示 3 位数字：<10 → 小数 2 位；10~100 → 小数 1 位；>100 → 仅整数部分
-                        const text = km > 100 ? km.toFixed(0) : km >= 10 ? km.toFixed(1) : km.toFixed(2)
-                        return <>{text}<span className="text-[var(--color-muted)] ml-1 font-normal text-xs">km</span></>
+                        const text = km >= 10 ? km.toFixed(1) : km.toFixed(2)
+                        return <>{text}</>
                       })()}
                     </td>
                     <td className="py-3 font-mono font-medium text-center">

@@ -44,6 +44,10 @@ from config import (
 from generator import Generator
 from generator.db import update_or_create_activity, backfill_location_country
 from gpxtrackposter.utils import parse_datetime_to_local
+from synced_data_file_logger import (
+    load_synced_file_list,
+    save_synced_data_file_list,
+)
 
 COROS_URL_DICT = {
     "LOGIN_URL": "https://teamcnapi.coros.com/account/login",
@@ -125,6 +129,7 @@ CorosActivity = namedtuple(
         "average_heartrate",
         "average_speed",
         "elevation_gain",
+        "calories",
         "map",
         "start_latlng",
         "source",
@@ -259,6 +264,22 @@ def build_coros_activity_namedtuple(detail, sport_type):
     freq = data.get("frequencyList", []) or []
     pause_list = data.get("pauseList", []) or []
 
+    # 设备信息：优先用 data.deviceList，缺失或为空时回退 "coros"。
+    # deviceList 可能为设备名字符串列表，也可能为含 deviceName/name/model 的对象列表。
+    device_list = data.get("deviceList") or []
+    device_name = ""
+    if device_list:
+        parts = []
+        for d in device_list:
+            if isinstance(d, dict):
+                parts.append(
+                    str(d.get("deviceName") or d.get("name") or d.get("model") or "")
+                )
+            else:
+                parts.append(str(d))
+        device_name = ", ".join(p for p in parts if p)
+    source = device_name or "coros"
+
     # 1) 轨迹点 + 起点（首个非零坐标）
     pts = []
     start_lat = start_lon = None
@@ -329,6 +350,10 @@ def build_coros_activity_namedtuple(detail, sport_type):
     # 与全仓库其他同步源（garmin/keep/codoon…）的 average_speed 约定(m/s) 统一。
     average_speed = (distance / moving_sec) if (moving_sec and distance) else 0.0
     elev_gain = summary.get("elevGain", 0) or 0
+    # calories：COROS 原生单位为 cal(小卡)，÷1000 转 kcal(大卡)，与 App 展示一致
+    # 兼容 summary 中可能存在的 calories / calorie / totalCalorie 命名
+    raw_cal = summary.get("calories") or summary.get("calorie") or summary.get("totalCalorie") or 0
+    calories = (float(raw_cal) / 1000.0) if raw_cal else 0.0
     name = summary.get("name", "") or ""
 
     run_id = int(start_ts * 10)  # 与 FIT 的 POSIX_sec*1000 同源，避免主键冲突
@@ -346,9 +371,10 @@ def build_coros_activity_namedtuple(detail, sport_type):
         average_heartrate=int(avg_hr) if avg_hr else None,
         average_speed=float(average_speed),
         elevation_gain=float(elev_gain) if elev_gain else 0.0,
+        calories=calories,
         map=run_map(polyline_str),
         start_latlng=start_point_obj,
-        source="coros",
+        source=source,
     )
 
 
@@ -360,8 +386,17 @@ async def sync_via_api(account, password, only_run):
     items = await coros.fetch_activity_ids_types(only_run=only_run)
     print(f"Fetched {len(items)} activities from COROS API")
 
+    # 增量过滤：imported.json 仅记录本脚本同步过的裸 labelId，
+    # 与 coros_sync.py 的 FIT 流程完全独立（互不读取对方的去重记录）。
+    synced_ids = set(load_synced_file_list())
+    if synced_ids:
+        before = len(items)
+        items = [it for it in items if it[0] not in synced_ids]
+        print(f"Skipped {before - len(items)} already-synced activities (via imported.json)")
+
     new_count = 0
     updated_count = 0
+    synced_label_ids = []
     for label_id, sport_type in items:
         try:
             detail = await coros.fetch_activity_detail(label_id, sport_type)
@@ -369,6 +404,7 @@ async def sync_via_api(account, password, only_run):
                 continue
             nt = build_coros_activity_namedtuple(detail, sport_type)
             created = update_or_create_activity(gen.session, nt)
+            synced_label_ids.append(label_id)
             if created:
                 sys.stdout.write("+")
                 new_count += 1
@@ -380,6 +416,9 @@ async def sync_via_api(account, password, only_run):
             print(f"\n[error] label {label_id}: {e}")
 
     gen.session.commit()
+    # 把本次同步的裸 labelId 写回 imported.json，供下次运行做增量过滤（与 coros_sync.py 互不影响）。
+    if synced_label_ids:
+        save_synced_data_file_list([str(label_id) for label_id in synced_label_ids])
     # 补全此前因限流/无网而缺失的位置信息（与原 FIT 流程一致）
     backfill_location_country(gen.session)
 

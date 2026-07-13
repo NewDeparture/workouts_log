@@ -82,6 +82,7 @@ ACTIVITY_KEYS = [
     "average_heartrate",
     "average_speed",
     "elevation_gain",
+    "calories",
     "source",
 ]
 
@@ -104,6 +105,7 @@ class Activity(Base):
     average_heartrate = Column(Float)
     average_speed = Column(Float)
     elevation_gain = Column(Float)
+    calories = Column(Float)
     streak = None
     source = Column(String)
     no_gps = Column(Boolean, default=False)  # 标记室内/无GPS活动，跳过地理编码
@@ -166,6 +168,7 @@ def update_or_create_activity(session, run_activity):
                 summary_polyline=(
                     run_activity.map and run_activity.map.summary_polyline or ""
                 ),
+                calories=getattr(run_activity, "calories", None),
                 source=source,
             )
             session.add(activity)
@@ -186,7 +189,11 @@ def update_or_create_activity(session, run_activity):
             activity.summary_polyline = (
                 run_activity.map and run_activity.map.summary_polyline or ""
             )
-            activity.source = source
+            # source 在首次建记录时已固定，更新分支不重写
+            # calories 跟随每次同步刷新（仅当该同步源提供时覆盖，避免清空其它源已写入的值）
+            incoming_calories = getattr(run_activity, "calories", None)
+            if incoming_calories is not None:
+                activity.calories = incoming_calories
             # 即使本次不重新解析位置，也刷新起点经纬度，
             # 以便后续 backfill_location_country 能据此补全缺失的位置
             start_point = run_activity.start_latlng

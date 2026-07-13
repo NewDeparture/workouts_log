@@ -387,10 +387,8 @@ class Joyrun:
         end = datetime.fromtimestamp(end_time, tz=timezone.utc)
         # only for China now
         end_local = adjust_time(end, BASE_TIMEZONE)
-        location_country = None
-        # joyrun location is kind of fucking strange, you can comments this two lines to make a better location
-        if run_data["city"] or run_data["province"]:
-            location_country = str(run_data["city"]) + ":" + str(run_data["province"])
+        # location_country 留空，统一由 db.py 的 reverse_geocode / backfill 反查
+        location_country = ""
         d = {
             "id": int(joyrun_id),
             "name": "run from joyrun",

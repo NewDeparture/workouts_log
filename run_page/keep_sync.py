@@ -181,7 +181,8 @@ def parse_raw_data_to_nametuple(
         ),
         "average_speed": run_data["distance"] / run_data["duration"],
         "elevation_gain": elevation_gain,
-        "location_country": str(run_data.get("region", "")),
+        # location_country 留空，统一由 db.py 的 reverse_geocode / backfill 反查
+        "location_country": "",
         "source": "Keep",
     }
     return namedtuple("x", d.keys())(*d.values())
