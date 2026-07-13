@@ -28,4 +28,5 @@ FIT_OUT/
 
 .venv/
 .pdm-python
+.codebuddy
 

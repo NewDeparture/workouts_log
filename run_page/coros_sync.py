@@ -206,7 +206,7 @@ async def download_and_generate(account, password, only_run, file_type):
     )
     print(f"Download finished. Elapsed {time.time()-start_time} seconds")
     await coros.req.aclose()
-    make_activities_file(SQL_FILE, folder, JSON_FILE, file_type)
+    make_activities_file(SQL_FILE, folder, JSON_FILE, file_type, source="coros")
 
 
 async def gather_with_concurrency(n, tasks):

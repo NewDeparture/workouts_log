@@ -49,11 +49,13 @@ def to_date(ts):
 
 
 def make_activities_file(
-    sql_file, data_dir, json_file, file_suffix="gpx", activity_title_dict={}
+    sql_file, data_dir, json_file, file_suffix="gpx", activity_title_dict={},
+    source=None,
 ):
     generator = Generator(sql_file)
     generator.sync_from_data_dir(
-        data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
+        data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict,
+        source=source,
     )
     activities_list = generator.load()
     with open(json_file, "w") as f:
@@ -61,11 +63,13 @@ def make_activities_file(
 
 
 def make_activities_file_only(
-    sql_file, data_dir, json_file, file_suffix="gpx", activity_title_dict={}
+    sql_file, data_dir, json_file, file_suffix="gpx", activity_title_dict={},
+    source=None,
 ):
     generator = Generator(sql_file)
     generator.sync_from_data_dir(
-        data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict
+        data_dir, file_suffix=file_suffix, activity_title_dict=activity_title_dict,
+        source=source,
     )
     activities_list = generator.loadForMapping()
     with open(json_file, "w") as f:
