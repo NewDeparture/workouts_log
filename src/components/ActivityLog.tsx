@@ -15,8 +15,6 @@ interface ActivityLogProps {
   filter?: SportFilter
 }
 
-const PAGE_SIZE = 16
-
 type DistanceFilter = 'all' | '5' | '10' | '20' | '40'
 
 
@@ -108,6 +106,18 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
   const [page, setPage] = useState(0)
   const [distFilter, setDistFilter] = useState<DistanceFilter>('all')
   const [gymTypeFilter, setGymTypeFilter] = useState<string>('all')
+  // 响应式每页条数：移动端(<md) 7 条，桌面端 15 条
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const onChange = () => setIsMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  const PAGE_SIZE = isMobile ? 7 : 15
 
   const isGym = filter === 'Gym'
   // ELEVATION（爬升）列在所有、跑步、骑行、徒步分类下显示（健身分类无此字段）
@@ -173,7 +183,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
   const colCount = isGym ? 7 : (showElevation ? 8 : 7)
 
   return (
-    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6">
+    <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-6 overflow-hidden h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">{logTitle}</h2>
@@ -219,7 +229,7 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
           ))}
         </div>
       ) : (
-        <div className="flex items-center gap-2 mb-5">
+        <div className="flex items-center gap-2 mb-5 flex-wrap">
           {([['all', t('all')], ['5', '5km+'], ['10', '10km+'], ['20', '20km+'], ['40', '40km+']] as [DistanceFilter, string][]).map(([val, label]) => (
             <button key={val} onClick={() => { setDistFilter(val); setPage(0) }}
               className={`px-3 py-1 rounded-full text-xs font-medium uppercase transition-all ${distFilter === val ? 'bg-[var(--color-accent)] text-white' : 'bg-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-text)]'}`}
@@ -230,8 +240,8 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         </div>
       )}
 
-      {/* Table */}
-      <div className="overflow-x-auto">
+      {/* Table — 仅桌面显示（md+） */}
+      <div className="hidden md:block overflow-x-auto overflow-y-hidden flex-1">
         <table className="w-full table-fixed text-sm">
           <thead>
               <tr className="text-left text-[var(--color-muted)] border-b border-[var(--color-border)]">
@@ -256,17 +266,20 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
                 )}
               </tr>
           </thead>
-          <tbody>
+          <tbody key={`${filter}-${year ?? 'all'}-${page}-${distFilter}-${gymTypeFilter}`}>
             {pageData.length > 0 ? (
-              pageData.map((a) => (
+              pageData.map((a, idx) => (
               <tr
                 key={a.run_id}
                 onClick={() => onSelectActivity?.(selectedActivity?.run_id === a.run_id ? null : a)}
-                className={`border-b border-[var(--color-border)]/30 cursor-pointer transition-colors ${
+                className={`activity-row cursor-pointer transition-colors ${
+                  idx < pageData.length - 1 ? 'border-b border-[var(--color-border)]/30' : ''
+                } ${
                   selectedActivity?.run_id === a.run_id
                     ? 'bg-[var(--color-accent)]/10 border-l-2 border-l-[var(--color-accent)]'
                     : 'hover:bg-[var(--color-bg)]'
                 }`}
+                style={{ '--row-i': idx } as CSSProperties}
               >
                 <td className="py-3 text-[var(--color-muted)] text-left">{a.start_date_local.slice(0, 16).replace('T', ' ')}</td>
                 <td className="py-3">{activityName(a, locale)}</td>
@@ -358,21 +371,91 @@ export function ActivityLog({ activities, years, year, setYear, selectedActivity
         </table>
       </div>
 
-      {/* Pagination */}
+      {/* Mobile card list — 仅手机显示（<md） */}
+      <div className="md:hidden flex flex-col gap-2 flex-1 overflow-y-auto">
+        {pageData.length > 0 ? (
+          pageData.map((a) => {
+            const selected = selectedActivity?.run_id === a.run_id
+            const km = a.distance / 1000
+            const distText = km >= 10 ? km.toFixed(1) : km.toFixed(2)
+            const mins = Math.round(parseTimeSecs(a.moving_time) / 60)
+            const p = a.type === 'Training' || a.average_speed == null || a.average_speed === 0
+              ? null
+              : paceParts(a.type, a.average_speed)
+            return (
+              <div
+                key={a.run_id}
+                onClick={() => onSelectActivity?.(selected ? null : a)}
+                className={`rounded-lg border p-3 transition-colors cursor-pointer ${
+                  selected
+                    ? 'bg-[var(--color-accent)]/10 border-l-2 border-l-[var(--color-accent)]'
+                    : 'border-[var(--color-border)] hover:bg-[var(--color-bg)]'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs text-[var(--color-muted)] truncate">{a.start_date_local.slice(0, 16).replace('T', ' ')}</span>
+                  <TypePill type={a.type} locale={locale} />
+                </div>
+                <p className="text-sm font-medium truncate mb-2">{activityName(a, locale)}</p>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  <div>
+                    <p className="text-[10px] text-[var(--color-muted)] uppercase">{t('distance')}</p>
+                    <p className="text-sm font-mono font-medium">{a.distance == null || a.distance === 0 ? '---' : distText}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-[var(--color-muted)] uppercase">{t('duration')}</p>
+                    <p className="text-sm font-mono font-medium">{mins}<span className="text-[10px] text-[var(--color-muted)]">min</span></p>
+                  </div>
+                  {isGym ? (
+                    <>
+                      <div>
+                        <p className="text-[10px] text-[var(--color-muted)] uppercase">{t('calories')}</p>
+                        <p className="text-sm font-mono font-medium">{a.calories != null ? Math.round(a.calories) : '---'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--color-muted)] uppercase">{t('hr')}</p>
+                        <p className="text-sm font-mono font-medium">{a.average_heartrate != null ? String(Math.round(a.average_heartrate)).padStart(3, '0') : '---'}</p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <p className="text-[10px] text-[var(--color-muted)] uppercase">{filter === 'Run' ? t('pace') : t('speed')}</p>
+                        <p className="text-sm font-mono font-medium">
+                          {p ? p.value : '---'}
+                          {p && p.unit && filter !== 'all' ? <span className="text-[10px] text-[var(--color-muted)]">{p.unit}</span> : null}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[var(--color-muted)] uppercase">{t('hr')}</p>
+                        <p className="text-sm font-mono font-medium">{a.average_heartrate != null ? String(Math.round(a.average_heartrate)).padStart(3, '0') : '---'}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        ) : (
+          <div className="py-16 text-center text-sm text-[var(--color-muted)]">{emptyMessage}</div>
+        )}
+      </div>
+
+      {/* Pagination — 移动端隐藏首页/末页，页码不换行 */}
       {sorted.length > 0 && (
-      <div className="flex items-center justify-between mt-4 pt-4 border-t border-[var(--color-border)]">
-        <div className="flex items-center gap-5">
+      <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
+        <div className="flex items-center gap-1 sm:gap-5 shrink-0">
           <button onClick={() => setPage(0)} disabled={page === 0}
-            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '首页' : 'First'}>«</button>
+            className="hidden md:flex w-9 h-9 items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '首页' : 'First'}>«</button>
           <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
             className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '上一页' : 'Prev'}>‹</button>
         </div>
-        <span className="text-sm text-[var(--color-muted)]">{t('page')} {page + 1} {t('pageOf')} {totalPages} {t('pages')}</span>
-        <div className="flex items-center gap-5">
+        <span className="text-sm text-[var(--color-muted)] whitespace-nowrap">{t('page')} {page + 1} {t('pageOf')} {totalPages} {t('pages')}</span>
+        <div className="flex items-center gap-1 sm:gap-5 shrink-0">
           <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
             className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '下一页' : 'Next'}>›</button>
           <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}
-            className="w-9 h-9 flex items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '末页' : 'Last'}>»</button>
+            className="hidden md:flex w-9 h-9 items-center justify-center text-2xl rounded text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 disabled:opacity-30 transition-colors" title={locale === 'zh' ? '末页' : 'Last'}>»</button>
         </div>
       </div>
       )}

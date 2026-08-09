@@ -7,9 +7,8 @@
     <title>Workout Dashboard</title>
     <script>
       ;(function () {
-        var stored = localStorage.getItem('theme')
-        var dark = stored === 'dark' ||
-          (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)
+        // 每次打开都跟随浏览器亮暗设置（不持久化手动选择）
+        var dark = window.matchMedia('(prefers-color-scheme: dark)').matches
         var root = document.documentElement
         if (dark) root.classList.add('dark')
         // 第一帧即用内联背景色，避免外部 CSS 解析前露出浏览器默认白底

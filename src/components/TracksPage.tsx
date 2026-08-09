@@ -7,7 +7,9 @@ import type { Activity } from '../types'
 import { getAvailableYears, formatDistance, parseMovingTime, formatPace } from '../hooks/useActivities'
 import { useLocale } from '../hooks/useLocale'
 import { BrandingBar } from './BrandingBar'
+import { Reveal } from './Reveal'
 import { categoryOf } from '../sportMeta'
+import { buildTrackPathCache } from '../trackPaths'
 
 const MAPBOX_TOKEN = 'pk.eyJ1IjoiYmVuLTI5IiwiYSI6ImNrZ3Q4Ym9mMDBqMGYyeXFvODV2dWl6YzQifQ.gSKoWF-fMjhzU67TuDezJQ'
 
@@ -21,45 +23,19 @@ interface TracksPageProps {
   onSelectActivity?: (a: Activity | null) => void
 }
 
-function renderTrackSVG(summaryPolyline: string, size = 80): string {
-  try {
-    const coords = polyline.decode(summaryPolyline)
-    if (coords.length < 2) return ''
-    const lats = coords.map(c => c[0])
-    const lngs = coords.map(c => c[1])
-    const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-    const latRange = maxLat - minLat || 0.001
-    const lngRange = maxLng - minLng || 0.001
-    const scale = Math.min((size - 8) / lngRange, (size - 8) / latRange)
-    const offsetX = (size - lngRange * scale) / 2
-    const offsetY = (size - latRange * scale) / 2
-    return coords.map(([lat, lng]) => {
-      const x = (lng - minLng) * scale + offsetX
-      const y = size - ((lat - minLat) * scale + offsetY)
-      return `${x.toFixed(1)},${y.toFixed(1)}`
-    }).join(' ')
-  } catch { return '' }
-}
-
-const TrackThumb = memo(function TrackThumb({ activity, color, selected, onClick }: {
-  activity: Activity; color: string; selected: boolean; onClick: () => void
+const TrackThumb = memo(function TrackThumb({ path, color, selected, onClick, title }: {
+  path: string; color: string; selected: boolean; onClick: () => void; title: string
 }) {
-  const size = 80
-  const points = useMemo(
-    () => (activity.summary_polyline ? renderTrackSVG(activity.summary_polyline, size) : ''),
-    [activity.summary_polyline, size]
-  )
-  if (!points) return null
+  // 自适应：svg 撑满所在网格列（aspect-square 保证正方形），坐标系统一为 100（与 polylineToPathD 一致）
+  if (!path) return null
   return (
     <div
-      className={`cursor-pointer group relative rounded transition-all ${selected ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-bg)]' : ''}`}
+      className={`cursor-pointer group relative aspect-square rounded transition-all ${selected ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-[var(--color-bg)]' : ''}`}
       onClick={onClick}
-      title={`${activity.name} — ${(activity.distance / 1000).toFixed(1)} km`}
+      title={title}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}
-        className={`transition-opacity ${selected ? 'opacity-100' : 'group-hover:opacity-100 opacity-60'}`}>
-        <polyline points={points} fill="none" stroke={color}
+      <svg viewBox="0 0 100 100" className={`w-full h-full transition-opacity ${selected ? 'opacity-100' : 'group-hover:opacity-100 opacity-60'}`}>
+        <path d={path} fill="none" stroke={color}
           strokeWidth={selected ? '2' : '1.5'} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
@@ -158,11 +134,8 @@ function getColor(a: Activity): string {
 export function TracksPage({ activities, dark, onBack, onSelectActivity }: TracksPageProps) {
   const { locale } = useLocale()
   const allYears = getAvailableYears(activities)
-  // 默认只展示最新年份的轨迹，减少首屏加载量；用户可手动切回「全部」
-  // getAvailableYears 返回降序数组，最新年份在 allYears[0]
-  const [selectedYear, setSelectedYear] = useState<number | null>(() =>
-    allYears.length ? allYears[0] : null
-  )
+  // 默认选择「全部」年份（null），展示所有轨迹；用户可点击具体年份筛选
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [sportFilter, setSportFilter] = useState<SportCat | null>(null)
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null)
   const [sortBy, setSortBy] = useState<'date' | 'distance'>('date')
@@ -204,59 +177,17 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
   const runs = base.filter(a => categoryOf(a.type) === 'run' && a.average_speed > 0)
   const avgPace = runs.length > 0 ? runs.reduce((s, a) => s + a.average_speed, 0) / runs.length : 0
 
-  // Cluster tracks — defer heavy work
-  type Cluster = { representative: Activity; count: number; color: string }
-  const [clusteredTracks, setClusteredTracks] = useState<Cluster[]>([])
-  const [clustering, setClustering] = useState(true)
+  // 预计算所有轨迹的 SVG path（一次性，仅活动数据变化时重建）——对齐 RUN.LOG 的 route_svg_path
+  const trackPathCache = useMemo(() => buildTrackPathCache(activities), [activities])
 
-  // 首屏就绪门控：进入页面时先渲染轻量占位，待浏览器绘制完当前帧
-  // （此时高亮指示器动画已经开始播放）后再执行重型计算，避免阻塞切换瞬间的过渡。
-  const [ready, setReady] = useState(false)
-  useEffect(() => {
-    let raf = requestAnimationFrame(() => {
-      raf = requestAnimationFrame(() => setReady(true))
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  useEffect(() => {
-    if (!ready) return
-    setClustering(true)
-    const id = setTimeout(() => {
-      const acts = [...withPolyline].sort((a, b) =>
-        new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime()
-      )
-      type Decoded = { start: [number, number]; end: [number, number]; distBucket: number }
-      const decoded: (Decoded | null)[] = acts.map(a => {
-        try {
-          const coords = polyline.decode(a.summary_polyline!)
-          if (coords.length < 2) return null
-          return { start: coords[0] as [number, number], end: coords[coords.length - 1] as [number, number], distBucket: Math.round(a.distance / 2000) }
-        } catch { return null }
-      })
-      const clusters: Cluster[] = []
-      const used = new Set<number>()
-      for (let i = 0; i < acts.length; i++) {
-        if (used.has(i)) continue
-        const di = decoded[i]
-        if (!di) continue
-        let count = 1
-        for (let j = i + 1; j < acts.length; j++) {
-          if (used.has(j)) continue
-          const dj = decoded[j]
-          if (!dj || di.distBucket !== dj.distBucket) continue
-          const startClose = Math.abs(di.start[0] - dj.start[0]) < 0.005 && Math.abs(di.start[1] - dj.start[1]) < 0.005
-          const endClose = Math.abs(di.end[0] - dj.end[0]) < 0.005 && Math.abs(di.end[1] - dj.end[1]) < 0.005
-          if (startClose && endClose) { used.add(j); count++ }
-        }
-        used.add(i)
-        clusters.push({ representative: acts[i], count, color: getColor(acts[i]) })
-      }
-      setClusteredTracks(clusters)
-      setClustering(false)
-    }, 0)
-    return () => clearTimeout(id)
-  }, [ready, withPolyline.length, selectedYear, sportFilter])
+  // 全部轨迹（不聚类，保留所有；切换筛选时 path 已缓存，渲染仅 O(1) 读取）
+  const tracks = useMemo(() => {
+    return [...withPolyline].sort((a, b) =>
+      sortBy === 'distance'
+        ? b.distance - a.distance
+        : new Date(b.start_date_local).getTime() - new Date(a.start_date_local).getTime()
+    )
+  }, [withPolyline, sortBy])
 
   const handleSelectTrack = (a: Activity) => {
     setSelectedActivity(prev => prev?.run_id === a.run_id ? null : a)
@@ -273,20 +204,23 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
   return (
     <div className="max-w-[1400px] mx-auto px-6 py-6">
       {/* Top bar: back + title */}
-      <div className="flex items-center gap-4 mb-5">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors shrink-0">
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          {locale === 'zh' ? '返回' : 'Back'}
-        </button>
-        <h1 className="text-lg font-bold shrink-0">{locale === 'zh' ? '轨迹墙' : 'Track Wall'}</h1>
-      </div>
+      <Reveal y={20} delay={0}>
+        <div className="flex items-center gap-4 mb-5">
+          <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors shrink-0">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            {locale === 'zh' ? '返回' : 'Back'}
+          </button>
+          <h1 className="text-lg font-bold shrink-0">{locale === 'zh' ? '轨迹墙' : 'Track Wall'}</h1>
+        </div>
+      </Reveal>
 
       <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-5 items-start">
         {/* Left: stats + map */}
         <div className="flex flex-col gap-4">
           {/* Stats card */}
+          <Reveal y={40} delay={100}>
           <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
             <p className="text-[10px] text-[var(--color-muted)] uppercase tracking-wider mb-3">
               {selectedYear ?? (locale === 'zh' ? '全部' : 'Total')}
@@ -312,6 +246,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
               )}
             </div>
           </div>
+          </Reveal>
 
           {/* Activity detail — only when a single track is selected */}
           {selectedActivity && (
@@ -362,15 +297,16 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
           )}
 
           {/* Map */}
-          <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden" style={{ height: 260 }}>
-            {ready
-              ? <TrackMap activity={selectedActivity} activities={withPolyline} dark={dark} />
-              : <div className="w-full h-full" />}
-          </div>
+          <Reveal y={40} delay={200}>
+            <div className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl overflow-hidden" style={{ height: 260 }}>
+              <TrackMap activity={selectedActivity} activities={withPolyline} dark={dark} />
+            </div>
+          </Reveal>
         </div>
 
         {/* Right: track grid with year filter inside */}
         <div className="min-w-0">
+          <Reveal y={40} delay={100}>
           <div ref={captureRef} className="bg-[var(--color-card)] border border-[var(--color-border)] rounded-xl p-4">
           <style>{`
             .exporting,
@@ -382,7 +318,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
             }
           `}</style>
           {/* Filter row 1: Year pills + export */}
-          <div className="flex items-center gap-1.5 mb-3">
+          <div className="flex flex-wrap items-center gap-1.5 mb-3">
             {totalYearPages > 1 && (
               <button onClick={() => setYearPage(p => Math.max(0, p - 1))} disabled={yearPage === 0}
                 className="text-[var(--color-muted)] hover:text-[var(--color-text)] disabled:opacity-30 transition-colors px-1 text-base leading-none">
@@ -446,7 +382,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
           </div>
 
           {/* Filter row 2: Sport type filter */}
-          <div className="flex items-center gap-1.5 mb-4 pb-3 border-b border-[var(--color-border)]">
+          <div className="flex flex-wrap items-center gap-1.5 mb-4 pb-3 border-b border-[var(--color-border)]">
             {/* 占位箭头：与年份行的 ‹ 等宽，保证「ALL」横向对齐 */}
             {totalYearPages > 1 && <span className="px-1 text-base leading-none invisible">‹</span>}
             <button onClick={() => setSportFilter(null)}
@@ -461,35 +397,25 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
             ))}
           </div>
 
-          {clustering ? (
-            <div className="flex flex-wrap gap-1">
-              {Array.from({ length: 40 }).map((_, i) => (
-                <div key={i} className="w-[80px] h-[80px] rounded bg-[var(--color-border)] animate-pulse" style={{ animationDelay: `${i * 20}ms` }} />
-              ))}
-            </div>
-          ) : clusteredTracks.length === 0 ? (
+          {tracks.length === 0 ? (
             <p className="text-sm text-[var(--color-muted)] py-8 text-center">{locale === 'zh' ? '暂无轨迹数据' : 'No tracks found'}</p>
           ) : (
-            <div className="flex flex-wrap gap-1">
-              {[...clusteredTracks].sort((a, b) =>
-                sortBy === 'distance'
-                  ? b.representative.distance - a.representative.distance
-                  : new Date(b.representative.start_date_local).getTime() - new Date(a.representative.start_date_local).getTime()
-              ).map(({ representative: a, count, color }) => (
-                <div key={a.run_id} className="relative">
+            <div key={`${selectedYear}-${sportFilter}-${sortBy}`} className="grid-enter grid gap-x-2 gap-y-4"
+              style={{ gridTemplateColumns: `repeat(${selectedYear === null ? 16 : 12}, minmax(0, 1fr))` }}>
+              {tracks.map(a => {
+                const path = trackPathCache.get(a.run_id)
+                if (!path) return null
+                return (
                   <TrackThumb
-                    activity={a}
-                    color={color}
+                    key={a.run_id}
+                    path={path}
+                    color={getColor(a)}
                     selected={selectedActivity?.run_id === a.run_id}
                     onClick={() => handleSelectTrack(a)}
+                    title={`${a.name} — ${(a.distance / 1000).toFixed(1)} km`}
                   />
-                  {count > 1 && (
-                    <span className="absolute bottom-1 right-1 bg-[var(--color-bg)]/80 text-[var(--color-muted)] text-[9px] font-bold px-1 py-0.5 rounded leading-none pointer-events-none">
-                      ×{count}
-                    </span>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -497,7 +423,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
           <div className="mt-6"><BrandingBar /></div>
 
           {/* Legend + sort */}
-          {!clustering && clusteredTracks.length > 0 && (
+          {tracks.length > 0 && (
             <div className="mt-4 pt-3 border-t border-[var(--color-border)] flex items-center gap-4 text-xs text-[var(--color-muted)] flex-wrap">
               {sportFilter === null || sportFilter === 'run' ? <>
                 <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#f97316] rounded" />{locale === 'zh' ? '跑步' : 'Run'}</span>
@@ -506,7 +432,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
               {(sportFilter === null || sportFilter === 'ride') && hasSport('ride') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#3b82f6] rounded" />{locale === 'zh' ? '骑行' : 'Ride'}</span>}
               {(sportFilter === null || sportFilter === 'hike') && hasSport('hike') && <span className="flex items-center gap-1.5"><span className="inline-block w-3 h-0.5 bg-[#22c55e] rounded" />{locale === 'zh' ? '徒步' : 'Hike'}</span>}
               <div className="ml-auto flex items-center gap-1">
-                <span>{clusteredTracks.length} {locale === 'zh' ? '条路线' : 'routes'}</span>
+                <span>{tracks.length} {locale === 'zh' ? '条路线' : 'routes'}</span>
                 <span className="mx-1.5 text-[var(--color-border)]">·</span>
                 <button onClick={() => setSortBy('date')}
                   className={`transition-colors ${sortBy === 'date' ? 'text-[var(--color-text)] font-medium' : 'hover:text-[var(--color-text)]'}`}>
@@ -521,6 +447,7 @@ export function TracksPage({ activities, dark, onBack, onSelectActivity }: Track
             </div>
           )}
         </div>{/* end track grid card */}
+        </Reveal>
         </div>{/* end right column */}
       </div>
     </div>

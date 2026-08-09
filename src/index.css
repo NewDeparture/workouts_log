@@ -31,6 +31,42 @@
 [data-filter="tracks"] { --color-accent: #06b6d4; }
 [data-filter="life"] { --color-accent: #ec4899; }
 
+/* ========== Activity Log 表格行逐行动画（复刻 RUN.LOG） ========== */
+/* 目标网站表格行：initial{y:10}→animate{y:0}，transition{delay:行索引*0.05}（无显式时长，用默认 ease-out）。
+   此处用 CSS animation 等效：每行从下方 10px 浮现，delay = 行索引 * 50ms 逐行错落。 */
+@keyframes row-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.activity-row {
+  animation: row-in 0.4s ease-out both;
+  animation-delay: calc(var(--row-i, 0) * 50ms);
+}
+
+/* 无障碍：偏好减少动效时关闭行动画 */
+@media (prefers-reduced-motion: reduce) {
+  .activity-row {
+    animation: none;
+  }
+}
+
+/* ========== 轨迹墙网格切换动画（复刻 RUN.LOG） ========== */
+/* 目标网站切换年份时：Ar.div{key:routes-${s}, initial{y:30}→animate{y:0}, duration:0.5 easeOut}
+   此处用 CSS animation 等效，切换筛选条件时网格容器 key 变化触发重新淡入。 */
+@keyframes grid-in {
+  from { opacity: 0; transform: translateY(30px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.grid-enter {
+  animation: grid-in 0.5s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grid-enter {
+    animation: none;
+  }
+}
+
 @keyframes type-marquee {
   from { transform: translateX(0); }
   to { transform: translateX(var(--marquee-distance, 0)); }
@@ -52,4 +88,57 @@ body {
   color: var(--color-text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   transition: background-color 0.3s, color 0.3s;
+}
+
+/* ========== Mapbox 控件主题自适应 + 透明度 ========== */
+/* 亮色主题：半透明白色玻璃质感控件（更强玻璃质感） */
+.mapboxgl-ctrl-group {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.28)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.7) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  overflow: hidden;
+  border-radius: 10px !important;
+}
+.mapboxgl-ctrl-group button {
+  background: transparent;
+}
+.mapboxgl-ctrl-group button + button {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+.mapboxgl-ctrl-group button:hover {
+  background-color: rgba(0, 0, 0, 0.07) !important;
+}
+.mapboxgl-ctrl-group button:focus {
+  box-shadow: none !important;
+}
+/* 全屏图标尺寸适中 */
+.mapboxgl-ctrl-fullscreen .mapboxgl-ctrl-icon,
+.mapboxgl-ctrl-shrink .mapboxgl-ctrl-icon {
+  background-size: 18px;
+}
+
+/* 暗色主题：半透明深色玻璃质感控件，图标反白 */
+.dark .mapboxgl-ctrl-group {
+  background: linear-gradient(160deg, rgba(34, 40, 50, 0.4), rgba(18, 22, 28, 0.22)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+.dark .mapboxgl-ctrl-group button + button {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.dark .mapboxgl-ctrl-group button:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.dark .mapboxgl-ctrl-icon {
+  filter: invert(1) brightness(1.6);
+}
+
+/* 删除 Mapbox 品牌 logo（左下角）与版权/信息文字链接（右下角 i 图标） */
+.mapboxgl-ctrl-attrib,
+.mapboxgl-ctrl-logo {
+  display: none !important;
 }

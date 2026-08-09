@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react'
-import { LogOut } from 'lucide-react'
+import { LogOut, Menu, X, ChevronDown, ChevronRight } from 'lucide-react'
 import type { SportFilter, Activity } from '../types'
 import { isRunType, isRideType, isHikeType, isGymType } from '../sportMeta'
 import { useLocale } from '../hooks/useLocale'
@@ -129,6 +129,29 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
   const navRefs = useRef<(HTMLSpanElement | null)[]>([])
   const [tabActiveRect, setTabActiveRect] = useState<{ left: number; width: number; top: number; height: number } | null>(null)
   const [navActiveRect, setNavActiveRect] = useState<{ left: number; width: number; top: number; height: number } | null>(null)
+  // 移动端汉堡抽屉开合
+  const [menuOpen, setMenuOpen] = useState(false)
+  // 首页下运动类型二级列表是否展开
+  const [homeExpanded, setHomeExpanded] = useState(true)
+
+  // 点击抽屉外部 / 按 Esc 关闭
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDown(e: MouseEvent) {
+      const el = e.target as HTMLElement
+      if (el.closest && el.closest('[data-header-menu]')) return
+      setMenuOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   const hasRun = activities.some((a) => isRunType(a.type))
   const hasRide = activities.some((a) => isRideType(a.type))
@@ -204,16 +227,16 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 flex items-center justify-between gap-3">
         {/* Logo */}
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-[var(--color-text)]">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-lg sm:text-2xl font-bold text-[var(--color-text)] leading-none whitespace-nowrap">
             WORKOUT<span className="text-[#ef4444]">.</span><span className="text-[#ef4444]">LOG</span>
           </span>
         </div>
 
-        {/* Sport filter tabs */}
-        <div className="flex items-center gap-1 relative">
+        {/* Sport filter tabs — 桌面显示，手机收进汉堡抽屉 */}
+        <div className="hidden md:flex items-center gap-1 relative">
           {tabActiveRect && (
             <span
               aria-hidden
@@ -259,50 +282,52 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
         </div>
 
         {/* Right nav */}
-        <div className="flex items-center gap-4 relative">
-          {/* Page nav */}
-          {navActiveRect && (
-            <span
-              aria-hidden
-              className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)]"
-              style={{
-                transform: `translate3d(${navActiveRect.left}px, ${navActiveRect.top}px, 0)`,
-                width: navActiveRect.width,
-                height: navActiveRect.height,
-                transition: 'transform 300ms ease-out, width 300ms ease-out, height 300ms ease-out',
-                willChange: 'transform',
-              }}
-            />
-          )}
-          {navItems.map((item, i) => (
-            <span
-              key={item.label}
-              ref={(el) => { navRefs.current[i] = el }}
-              onMouseEnter={() => setNavHover(i)}
-              onMouseLeave={() => setNavHover(null)}
-              onClick={() => onNavigate(item.page)}
-              className={`relative z-10 text-sm cursor-pointer px-3 py-1 rounded-full transition-colors ${
-                item.page === page
-                  ? 'text-[var(--color-accent)] font-medium'
-                  : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
-              }`}
-            >
-              {item.label}
-            </span>
-          ))}
-          {navHover !== null && navRefs.current[navHover] && navItems[navHover].page !== page && (
-            <span
-              aria-hidden
-              className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-border)_45%,transparent)]"
-              style={{
-                transform: `translate3d(${navRefs.current[navHover]!.offsetLeft}px, ${navRefs.current[navHover]!.offsetTop}px, 0)`,
-                width: navRefs.current[navHover]!.offsetWidth,
-                height: navRefs.current[navHover]!.offsetHeight,
-                transition: 'transform 200ms ease-out, width 200ms ease-out, height 200ms ease-out',
-                willChange: 'transform',
-              }}
-            />
-          )}
+        <div className="flex items-center gap-3 sm:gap-4 relative shrink-0">
+          {/* Page nav — 桌面显示，手机收进汉堡抽屉 */}
+          <div className="hidden md:flex items-center gap-1 relative">
+            {navActiveRect && (
+              <span
+                aria-hidden
+                className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-accent)_16%,transparent)]"
+                style={{
+                  transform: `translate3d(${navActiveRect.left}px, ${navActiveRect.top}px, 0)`,
+                  width: navActiveRect.width,
+                  height: navActiveRect.height,
+                  transition: 'transform 300ms ease-out, width 300ms ease-out, height 300ms ease-out',
+                  willChange: 'transform',
+                }}
+              />
+            )}
+            {navItems.map((item, i) => (
+              <span
+                key={item.label}
+                ref={(el) => { navRefs.current[i] = el }}
+                onMouseEnter={() => setNavHover(i)}
+                onMouseLeave={() => setNavHover(null)}
+                onClick={() => onNavigate(item.page)}
+                className={`relative z-10 text-sm cursor-pointer px-3 py-1 rounded-full transition-colors ${
+                  item.page === page
+                    ? 'text-[var(--color-accent)] font-medium'
+                    : 'text-[var(--color-muted)] hover:text-[var(--color-text)]'
+                }`}
+              >
+                {item.label}
+              </span>
+            ))}
+            {navHover !== null && navRefs.current[navHover] && navItems[navHover].page !== page && (
+              <span
+                aria-hidden
+                className="absolute z-0 rounded-full pointer-events-none bg-[color-mix(in_srgb,var(--color-border)_45%,transparent)]"
+                style={{
+                  transform: `translate3d(${navRefs.current[navHover]!.offsetLeft}px, ${navRefs.current[navHover]!.offsetTop}px, 0)`,
+                  width: navRefs.current[navHover]!.offsetWidth,
+                  height: navRefs.current[navHover]!.offsetHeight,
+                  transition: 'transform 200ms ease-out, width 200ms ease-out, height 200ms ease-out',
+                  willChange: 'transform',
+                }}
+              />
+            )}
+          </div>
 
           {/* Theme toggle */}
           <button
@@ -328,8 +353,88 @@ export function Header({ filter, setFilter, dark, toggleTheme, activities, page,
             {locale === 'zh' ? 'EN' : '中'}
           </button>
 
-          {/* GitHub Auth */}
-          <GitHubAuthDropdown />
+          {/* GitHub Auth — 仅桌面显示，手机隐藏 */}
+          <div className="hidden md:block">
+            <GitHubAuthDropdown />
+          </div>
+
+          {/* Mobile hamburger toggle — 仅手机显示 */}
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            aria-label={menuOpen ? '关闭菜单' : '打开菜单'}
+            aria-expanded={menuOpen}
+            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[var(--color-card)] transition-colors text-[var(--color-text)]"
+          >
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+
+          {/* Mobile dropdown menu */}
+          {menuOpen && (
+            <div data-header-menu className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-xl z-50 overflow-hidden">
+              <div className="py-1.5">
+                {/* 首页 + 运动类型二级菜单 */}
+                <div className="flex items-center pr-2">
+                  <button
+                    onClick={() => { onNavigate('home'); setMenuOpen(false) }}
+                    className={`flex-1 text-left px-3 py-2.5 text-sm transition-colors ${
+                      page === 'home' ? 'text-[var(--color-accent)] font-medium' : 'text-[var(--color-text)]'
+                    }`}
+                  >
+                    {navItems.find((n) => n.page === 'home')?.label}
+                  </button>
+                  <button
+                    onClick={() => setHomeExpanded((o) => !o)}
+                    className="p-2 rounded-lg text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40 transition-colors"
+                    aria-label={homeExpanded ? '收起运动类型' : '展开运动类型'}
+                    aria-expanded={homeExpanded}
+                  >
+                    {homeExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                {/* 运动类型二级列表 */}
+                {homeExpanded && (
+                  <div className="flex flex-col gap-0.5 px-3 pl-6">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.value}
+                        onClick={() => { setFilter(tab.value); if (page !== 'home') onNavigate('home'); setMenuOpen(false) }}
+                        className={`flex items-center gap-2 text-left px-2 py-2 rounded-lg text-sm transition-colors ${
+                          filter === tab.value && page === 'home'
+                            ? 'text-[var(--color-accent)] font-medium'
+                            : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block w-1.5 h-1.5 rounded-full transition-colors ${
+                            filter === tab.value && page === 'home'
+                              ? 'bg-[var(--color-accent)]'
+                              : 'bg-[var(--color-muted)]/50'
+                          }`}
+                        />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* 其他页面导航 */}
+                {navItems.filter((n) => n.page !== 'home').map((item) => (
+                  <button
+                    key={item.page}
+                    onClick={() => { onNavigate(item.page); setMenuOpen(false) }}
+                    className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
+                      item.page === page
+                        ? 'text-[var(--color-accent)] font-medium'
+                        : 'text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-border)]/40'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </header>

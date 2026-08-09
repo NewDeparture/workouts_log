@@ -35,7 +35,7 @@ export function RouteMap({ activities, selectedActivity, dark, onClearSelection 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style,
-      center: [121.4, 31.2],
+      center: [106.55, 29.56],
       zoom: 10,
     })
 
@@ -149,13 +149,29 @@ export function RouteMap({ activities, selectedActivity, dark, onClearSelection 
       },
     })
 
-    // Fit bounds to majority of routes (ignore outliers)
-    // Use median-based approach: find the region where most routes are
+    // Fit bounds to majority of routes (ignore outliers).
+    // 若当前 activities 跨多个年份（未筛选具体年份，即"全部"视图），聚焦最近一年避免范围过大；
+    // 若集中在单一年份（用户已筛选具体年份，如 2024），则统计该年份全部记录，确保正确缩放。
+    const years = new Set(
+      activities
+        .filter(a => a.start_date_local)
+        .map(a => new Date(a.start_date_local).getFullYear())
+    )
+    const isSingleYear = years.size <= 1
+
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+
     const allCoords: [number, number][] = []
-    for (const f of features) {
-      // Use first coord of each route as representative point
-      if (f.geometry.coordinates.length > 0) {
-        allCoords.push(f.geometry.coordinates[0] as [number, number])
+    for (const a of activities) {
+      if (!a.summary_polyline) continue
+      // 跨多年度时才限制为最近一年；已筛选具体年份则统计全部
+      if (!isSingleYear && a.start_date_local && new Date(a.start_date_local) < oneYearAgo) continue
+      const coords = polyline.decode(a.summary_polyline)
+      if (coords.length > 0) {
+        // decode 返回 [lat, lng]，LngLatBounds 需要 [lng, lat]
+        const [lat, lng] = coords[0]
+        allCoords.push([lng, lat])
       }
     }
 
