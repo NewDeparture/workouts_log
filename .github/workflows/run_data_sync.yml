@@ -3,7 +3,7 @@
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 20 * * 1,3,5'
+    - cron: '0 20 * * 6'
   # 以下 push 触发器已注释，如需代码推送时自动同步可取消注释
   # push:
   #   branches:
